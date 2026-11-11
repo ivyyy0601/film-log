@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500&family=Ma+Shan+Zheng&display=swap">
+<title>Film Log · Color & Frames</title>
+<style>
+  :root{
+    --bg:#edf0f2; --ink:#17212c; --ink2:#293645; --muted:#6f7d8b; --faint:#84909f;
+    --line:#e5e7eb; --line2:#dce1e7; --sage:#d9e1dc; --forest:#29483d; --forest-ink:#294438; --mint:#e9efe6;
+    --shadow:0 6px 24px #17212c10; --shadow-lg:0 10px 36px #17212c1c;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  html,body{margin:0;height:100%}
+  body{font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB",sans-serif;color:var(--ink);background:var(--bg)}
+  button,input,select{font:inherit;color:inherit}
+  button{cursor:pointer;background:#fff;border:1px solid #e3e7ec;border-radius:9px;padding:8px 13px;transition:background .15s,border-color .15s}
+  button:hover{background:#f4f7f5}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  button.primary{background:var(--forest);border-color:var(--forest);color:#fff;font-weight:600}
+  button.primary:hover{background:#21392f}
+  select,input[type=text]{border:1px solid var(--line2);border-radius:8px;padding:7px 10px;background:#fff;font-size:14px}
+  input[type=range]{width:100%;accent-color:var(--forest)}
+  input[type=checkbox]{accent-color:var(--forest);width:16px;height:16px}
+  :focus-visible{outline:3px solid #b8cfc3;outline-offset:2px}
+
+  .app{display:grid;grid-template-columns:300px 1fr 360px;gap:20px;height:100vh;padding:20px 24px}
+  .panel{background:#fff;border:1px solid var(--line);border-radius:13px;box-shadow:var(--shadow);display:flex;flex-direction:column;min-height:0}
+
+  /* 左：品牌 + 照片 */
+  .left{gap:14px;background:transparent;border:0;box-shadow:none}
+  .brandbar{background:#fff;border:1px solid var(--sage);border-radius:8px;box-shadow:0 3px 18px #263c3612;display:flex;align-items:center;gap:12px;padding:8px 10px}
+  .brand{font-size:20px;font-weight:800;letter-spacing:-1px;padding:3px 6px;white-space:nowrap}
+  .brand span{font-weight:400;margin-left:4px}
+  .divider{width:1px;height:24px;background:var(--line)}
+  .brandbar small{color:var(--faint);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .photos{flex:1;padding:18px;min-height:0}
+  .photos-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+  h1{font-size:18px;margin:0;font-weight:650}
+  h1 span{color:var(--faint);font-size:14px;margin-left:8px;font-weight:400}
+  .textbtn{border:0;background:none;padding:0;color:var(--muted);font-size:13px}
+  .textbtn:hover{background:none;color:var(--ink)}
+  .list{flex:1;overflow:auto;margin:0 -4px;min-height:0}
+  .li{display:flex;gap:12px;align-items:center;padding:11px 6px;border-bottom:1px solid #edf0f3;cursor:pointer;position:relative;border-radius:8px}
+  .li:hover{background:#f6f8f6}
+  .li.on{background:var(--mint)}
+  .li canvas,.li .ph{width:54px;height:54px;border-radius:8px;object-fit:cover;background:#edf3ef;flex:none;display:block}
+  .li .t{min-width:0;flex:1}
+  .li .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14.5px;font-weight:600}
+  .li .d{color:#738091;font-size:12px}
+  .li .x{position:absolute;right:6px;top:8px;border:0;background:transparent;color:var(--faint);padding:2px 6px;display:none;font-size:13px}
+  .li:hover .x{display:block}
+  .li .badge{font-size:11px;color:var(--forest);background:#fff;border:1px solid var(--sage);border-radius:5px;padding:0 5px;margin-left:6px;font-weight:500}
+  .addbtn{margin-top:12px;border:1px dashed #b9c9bf;color:var(--forest);background:#fbfcfb;padding:11px}
+  .addbtn:hover{background:var(--mint)}
+
+  /* 中：预览 */
+  .center{display:flex;flex-direction:column;min-width:0;min-height:0;position:relative}
+  .stage{flex:1;display:flex;align-items:center;justify-content:center;padding:28px 10px 18px;min-height:0}
+  .stage canvas{max-width:100%;max-height:100%;box-shadow:var(--shadow-lg);background:#fff}
+  .stage.pick canvas{cursor:crosshair}
+  .stage.drag canvas{cursor:grab}
+  .stage.dragging canvas{cursor:grabbing}
+  .eyebrow{font-size:11.5px;color:#83897e;text-transform:uppercase;letter-spacing:.08em}
+  .titlebar{display:flex;justify-content:center;padding-top:4px}
+  .titlebar .tag{font-size:14px;font-weight:600;color:var(--forest-ink);letter-spacing:.5px;padding:7px 14px;background:#ffffffdf;border:1px solid #fff;border-radius:6px;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .meta{display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap;padding-bottom:6px;font-size:13px;color:var(--muted)}
+  .meta .dot{width:3px;height:3px;border-radius:50%;background:#b7c0c9}
+  .meta .warn{color:#9a6b1f}
+  .meta button{font-size:13px;padding:6px 12px;border-radius:24px;box-shadow:0 2px 8px #17212c0c}
+  .empty{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--muted);text-align:center;background:#fff;border:1px dashed #b9c7d9;border-radius:13px;padding:44px 40px;cursor:pointer;max-width:440px;box-shadow:var(--shadow);font-size:14px}
+  .empty strong{color:var(--ink2);font-size:17px;font-weight:650}
+  .empty .hint{font-size:12.5px;color:var(--faint)}
+  .dropmask{position:fixed;inset:0;background:#29483d14;border:3px dashed var(--forest);display:none;z-index:40;align-items:center;justify-content:center;font-size:18px;color:var(--forest);font-weight:600}
+  .dropmask.show{display:flex}
+
+  /* 右：设置 */
+  .right{overflow:hidden}
+  .settings{flex:1;overflow:auto;padding:4px 20px 10px}
+  .sec{padding:16px 0;border-bottom:1px solid #edf0f3}
+  .sec:last-child{border-bottom:0}
+  .sec-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .sec-head h2{font-size:16px;margin:0;font-weight:650}
+  .chips{display:flex;flex-wrap:wrap;gap:7px}
+  .chip{border-radius:24px;font-size:13.5px;padding:6px 13px;box-shadow:0 2px 8px #17212c0a}
+  .chip.on{background:var(--forest);border-color:var(--forest);color:#fff}
+  .seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;background:#f1f4f2;border-radius:9px;padding:3px;gap:3px;margin-bottom:6px}
+  .seg button{border:0;background:transparent;padding:6px;font-size:13.5px;border-radius:7px;color:var(--muted)}
+  .seg button.on{background:#fff;color:var(--forest);font-weight:600;box-shadow:0 1px 4px #17212c18}
+  .sub{margin:16px 0 8px;display:flex;justify-content:space-between;align-items:baseline}
+  .row{display:grid;grid-template-columns:64px 1fr 46px;align-items:center;gap:10px;margin:8px 0}
+  .row label{font-size:13.5px;color:var(--ink2)}
+  .row output{font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--faint);text-align:right}
+  details summary{cursor:pointer;font-size:13px;color:var(--muted);margin-top:10px;list-style:none}
+  details summary::before{content:"+ ";color:var(--forest)}
+  details[open] summary::before{content:"– "}
+  .kv{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0;font-size:13.5px;color:var(--ink2)}
+  .kv select,.kv input[type=text]{width:170px}
+  .toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:11px 0;font-size:13.5px;color:var(--ink2);cursor:pointer}
+  .note{font-size:12.5px;color:var(--faint);margin:8px 0 0;line-height:1.55}
+  .colorhead{display:flex;align-items:center;gap:12px;margin:12px 0}
+  .bigsw{width:44px;height:44px;border-radius:9px;border:1px solid var(--line2);flex:none}
+  .colorhead .info{flex:1;min-width:0}
+  .colorhead .hex{font-weight:650;font-size:15px;font-variant-numeric:tabular-nums}
+  .colorhead .cnote{font-size:12px;color:var(--faint)}
+  input[type=color]{width:38px;height:34px;border:1px solid var(--line2);border-radius:8px;padding:3px;background:#fff}
+  .swatches{display:flex;gap:8px;flex-wrap:wrap}
+  .sw{width:26px;height:26px;border-radius:50%;border:1px solid #d6dbd8;padding:0;box-shadow:none}
+  .sw.on{outline:2px solid var(--forest);outline-offset:2px}
+  .sw.blur{background:linear-gradient(135deg,#a9bfc9,#dccdb0);font-size:9px;color:#fff}
+  .palette{display:flex;height:30px;border-radius:7px;overflow:hidden;border:1px solid var(--line)}
+  .palette button{border:0;border-radius:0;padding:0;flex:1;min-width:14px;position:relative;box-shadow:none}
+  .palette button.on::after{content:"✓";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;mix-blend-mode:difference;color:#fff}
+  .exportbar{border-top:1px solid var(--line);padding:14px 20px;display:grid;grid-template-columns:1fr 1.5fr;gap:10px}
+  .exportbar button{padding:11px}
+  .progress{height:3px;background:#edf0f3;display:none}
+  .progress i{display:block;height:100%;width:0;background:var(--forest);transition:width .2s}
+  .toast{position:fixed;left:50%;bottom:34px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:9px;font-size:14px;opacity:0;pointer-events:none;transition:.25s;z-index:50;max-width:90vw;box-shadow:0 3px 14px #17212c20}
+  .toast.show{opacity:1}
+
+  @media (max-width:1100px){ .app{grid-template-columns:260px 1fr 330px;gap:14px;padding:14px} }
+  @media (max-width:900px){
+    .app{grid-template-columns:1fr;height:auto;padding:12px;gap:12px}
+    .photos{padding:14px}
+    .list{display:flex;overflow-x:auto;gap:6px;margin:0}
+    .li{flex-direction:column;width:70px;flex:none;padding:4px;border:0}
+    .li .t{display:none}
+    .li .x{display:block}
+    .center{min-height:64vh}
+    .stage canvas{max-height:56vh}
+    .exportbar{position:sticky;bottom:0;background:#fff;border-radius:0 0 13px 13px}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <section class="left panel">
+    <div class="brandbar">
+      <div class="brand">FILM<span>LOG</span></div>
+      <div class="divider"></div>
+      <small>Color &amp; frames</small>
+    </div>
+    <div class="panel photos">
+      <div class="photos-head"><h1>My photos<span id="count">0</span></h1><button class="textbtn" id="clearBtn">Clear</button></div>
+      <div class="list" id="list"></div>
+      <button class="addbtn" id="addBtn">+ Add photos</button>
+    </div>
+  </section>
+
+  <section class="center">
+    <div class="titlebar"><span class="tag" id="fname">FRAME LOG</span></div>
+    <div class="stage" id="stage">
+      <label class="empty" id="empty">
+        <span class="eyebrow">Start here</span>
+        <strong>Drop photos here, or click to browse</strong>
+        Import a batch at once — color and framing are applied automatically
+        <span class="hint">JPG · PNG · WebP　|　Processed locally in your browser</span>
+      </label>
+      <canvas id="view" hidden></canvas>
+    </div>
+    <div class="meta" id="infobar" hidden>
+      <span id="iSize"></span><span class="dot"></span>
+      <span id="iMargin"></span><span class="dot"></span>
+      <span id="iColor"></span>
+      <button id="cmpBtn" title="Or hold the space bar">Hold to compare</button>
+    </div>
+  </section>
+
+  <section class="right panel">
+    <div class="settings">
+      <div class="sec">
+        <div class="sec-head"><h2>Color</h2><button class="textbtn" id="resetTune">Reset</button></div>
+        <div class="chips" id="presetChips"></div>
+        <div class="row" style="margin-top:12px"><label>Strength</label><input type="range" id="strength" min="0" max="150" value="100"><output></output></div>
+        <details>
+          <summary>Fine-tune</summary>
+          <div class="row"><label>Exposure</label><input type="range" id="bright" min="-30" max="30" value="0"><output></output></div>
+          <div class="row"><label>Contrast</label><input type="range" id="contrast" min="-30" max="30" value="0"><output></output></div>
+          <div class="row"><label>Saturation</label><input type="range" id="sat" min="-30" max="30" value="0"><output></output></div>
+          <div class="row"><label>Warmth</label><input type="range" id="warm" min="-30" max="30" value="0"><output></output></div>
+        </details>
+        <div class="kv" style="margin-top:12px"><span>This photo</span><select id="itemPreset"></select></div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-head"><h2>Frame</h2></div>
+        <div class="seg" id="modeSeg"></div>
+        <div id="modePolaroid">
+          <div class="sub"><span class="eyebrow">Film format</span></div>
+          <div class="chips" id="polFmtChips"></div>
+          <div id="polCustom">
+            <div class="row" style="margin-top:10px"><label>Border</label><input type="range" id="polSide" min="1" max="15" step="0.5"><output></output></div>
+            <div class="row"><label>Bottom</label><input type="range" id="polBot" min="5" max="40" step="0.5"><output></output></div>
+          </div>
+          <p class="note" id="polFmtNote"></p>
+          <div class="sub"><span class="eyebrow">Card stock</span></div>
+          <div class="chips" id="polCardChips"></div>
+          <div class="kv" style="margin-top:12px"><span>Handwritten note</span><input type="text" id="caption" placeholder="NYC · 2026.11" maxlength="40"></div>
+          <div class="sub"><span class="eyebrow">Carousel format</span></div>
+          <div class="chips" id="unifyChips"></div>
+          <p class="note">Exports every photo at one shared aspect ratio. Each print sits on a matching light backdrop, so mixed portrait and landscape shots stay uncropped in a carousel.</p>
+        </div>
+        <div id="modeRatio">
+          <div class="sub"><span class="eyebrow">Aspect ratio</span></div>
+          <div class="chips" id="ratioChips"></div>
+          <div class="row" style="margin-top:10px"><label>Margin</label><input type="range" id="minMargin" min="0" max="20" step="0.5"><output></output></div>
+          <p class="note">The full photo is kept, centered on the chosen canvas with no cropping.</p>
+        </div>
+      </div>
+
+      <div class="sec" id="colorCard">
+        <div class="sec-head"><h2 id="colorCardTitle">Border color</h2></div>
+        <div class="seg" id="colorSeg"></div>
+        <div class="colorhead">
+          <div class="bigsw" id="bigSw"></div>
+          <div class="info"><div class="hex" id="hexText">#FFFFFF</div><div class="cnote" id="colorNote">Applied to all photos</div></div>
+          <input type="color" id="colorPicker" title="Pick a color">
+          <button id="pickBtn" title="Click the photo to sample a color">Eyedropper</button>
+        </div>
+        <div class="swatches" id="swatches"></div>
+        <div class="sub"><span class="eyebrow">Photo palette</span><span class="note" style="margin:0">Click to use</span></div>
+        <div class="palette" id="palette"></div>
+        <label class="toggle"><span>Apply to this photo only</span><input type="checkbox" id="onlyCurrent"></label>
+        <div id="overrideRow" class="toggle" hidden><span>This photo has its own color</span><button class="textbtn" id="clearOverride">Reset</button></div>
+        <label class="toggle"><span>Drop shadow</span><input type="checkbox" id="shadow"></label>
+      </div>
+
+      <div class="sec">
+        <div class="sec-head"><h2>Export</h2></div>
+        <div class="kv"><span>Size</span>
+          <select id="outLong"><option value="1080">Standard · 1080 wide</option><option value="1440">High-res · 1440 wide</option><option value="0">Original resolution</option></select></div>
+        <div class="kv"><span>JPG quality</span>
+          <select id="quality"><option value="0.88">88%</option><option value="0.92">92%</option><option value="0.96">96%</option></select></div>
+        <div class="kv"><span>Filename suffix</span><input type="text" id="suffix"></div>
+        <label class="toggle"><span>Keep camera data (EXIF)</span><input type="checkbox" id="keepExif"></label>
+        <label class="toggle"><span>Remove location</span><input type="checkbox" id="stripGps"></label>
+        <p class="note">Camera data is only available from JPG originals. Orientation is corrected automatically.</p>
+      </div>
+    </div>
+    <div class="progress" id="progress"><i></i></div>
+    <div class="exportbar">
+      <button id="exportOne" disabled>Export this</button>
+      <button class="primary" id="exportAll" disabled>Export all</button>
+    </div>
+  </section>
+</div>
+<input type="file" id="file" accept="image/*" multiple hidden>
+<div class="dropmask" id="dropmask">Drop to add photos</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+"use strict";
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b) => v<a?a:v>b?b:v;
+const lerp = (a,b,t) => a+(b-a)*t;
+const tick = () => new Promise(r=>setTimeout(r,0));
+let toastTimer;
+function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("show"); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove("show"),2600); }
+function mkCanvas(w,h){ const c=document.createElement("canvas"); c.width=Math.max(1,Math.round(w)); c.height=Math.max(1,Math.round(h)); return c; }
+const hex2 = v => Math.round(clamp(v,0,255)).toString(16).padStart(2,"0");
+const toHex = (r,g,b) => ("#"+hex2(r)+hex2(g)+hex2(b)).toUpperCase();
+
+/* ================= 设置 ================= */
+const PRESETS = {
+  natural:{name:"Natural", wb:.6, clip:.4, contrast:.12, vib:.25, sat:0,    warm:0,    fade:0,   bright:0},
+  clear:  {name:"Clear", wb:.7, clip:.9, contrast:.22, vib:.35, sat:.03,  warm:0,    fade:0,   bright:.03},
+  vivid:  {name:"Vivid", wb:.6, clip:.6, contrast:.26, vib:.55, sat:.10,  warm:0,    fade:0,   bright:.01},
+  film:   {name:"Warm film", wb:.4, clip:.3, contrast:.08, vib:.15, sat:-.06, warm:.07, fade:.05, bright:.02},
+  cool:   {name:"Cool", wb:.6, clip:.4, contrast:.14, vib:.22, sat:-.03, warm:-.06, fade:0,   bright:.02},
+  none:   {name:"Original"}
+};
+const RATIOS = ["1:1","4:5","3:4"];
+
+const SWATCHES = ["#FFFFFF","#F4F0E8","#E6DCC8","#D9D9D9","#8A8A8A","#333333","#000000","blur"];
+
+const DEFAULTS = {
+  preset:"natural", strength:100, bright:0, contrast:0, sat:0, warm:0,
+  polCrop:"fit", polSide:5, polBot:22, polFmt:"auto", unify:"", polCard:"white",
+  sizeMode:"polaroid", uniform:5, ratio:"1:1", minMargin:4, cT:5, cB:18, cL:5, cR:5,
+  colorMode:"single", color:"#FFFFFF", onlyCurrent:false, shadow:false,
+  outLong:1080, quality:0.92, suffix:"_filmlog", keepExif:true, stripGps:true
+};
+let S = {...DEFAULTS};
+try { const sv = JSON.parse(localStorage.getItem("filmlog-v1")||"null"); if (sv) S = {...S, ...sv}; } catch(e){}
+const CARD = {white:{name:"White",fill:"#FBFBF8",ink:"#3a3a3a"}, cream:{name:"Ivory",fill:"#F2EDE1",ink:"#4a4036"}, black:{name:"Black",fill:"#1E1E1E",ink:"#ECEAE4"}};
+// 真实 Polaroid 尺寸：卡纸 88×107mm，照片 79×79mm（侧边约 4.5mm，上 6mm，下 22mm）
+const POL = {side:.057, top:.076, bot:.278};
+let NOISE=null;
+function noisePattern(ctx){
+  if (!NOISE){
+    NOISE=mkCanvas(180,180); const x=NOISE.getContext("2d"), im=x.createImageData(180,180);
+    let seed=11; const rnd=()=>{ seed=(seed*16807)%2147483647; return seed/2147483647; };
+    for(let i=0;i<im.data.length;i+=4){ const v=rnd()<.5?0:255; im.data[i]=im.data[i+1]=im.data[i+2]=v; im.data[i+3]=Math.floor(rnd()*14); }
+    x.putImageData(im,0,0);
+  }
+  return ctx.createPattern(NOISE,"repeat");
+}
+const tiltOf = it => { const t=((it.id*7919)%5-2)*0.8; return t||1.2; };
+if (!["polaroid","ratio"].includes(S.sizeMode)) S.sizeMode="polaroid";
+if (!RATIOS.includes(S.ratio)) S.ratio="1:1";
+if (![1080,1440,0].includes(S.outLong)) S.outLong=1080;
+S.polCrop="fit"; if (!["","1:1","4:5","3:4"].includes(S.unify)) S.unify=""; if (!["auto","mini","square","wide","polaroid","custom"].includes(S.polFmt)) S.polFmt="auto";
+const saveS = () => { try { localStorage.setItem("filmlog-v1", JSON.stringify(S)); } catch(e){} };
+
+/* ================= 下载 ================= */
+let dl = null;
+const inClaude = typeof window.claude === "object" && window.claude && typeof window.claude.use === "function";
+if (inClaude) window.claude.use("downloads").then(x => { dl = x; }).catch(()=>{});
+async function saveBlob(blob, filename){
+  if (dl){
+    try { await dl.save({filename, data:blob}); return; }
+    catch(e){ toast(e && e.code==="declined" ? "Save cancelled" : "Couldn't save: " + ((e&&(e.message||e.code))||"unknown error")); return; }
+  }
+  const url = URL.createObjectURL(blob), a = document.createElement("a");
+  a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 5000);
+}
+
+/* ================= 图像基础 ================= */
+async function decode(file){
+  try { return await createImageBitmap(file, {imageOrientation:"from-image"}); }
+  catch(e){
+    const url = URL.createObjectURL(file);
+    try { const img=new Image(); img.src=url; await img.decode(); return img; }
+    finally { setTimeout(()=>URL.revokeObjectURL(url),1000); }
+  }
+}
+const srcW = s => s.naturalWidth || s.width, srcH = s => s.naturalHeight || s.height;
+function drawScaled(src, w, h){
+  w=Math.max(1,Math.round(w)); h=Math.max(1,Math.round(h));
+  let cur=src, cw=srcW(src), ch=srcH(src);
+  while (cw/2 >= w*1.05 && ch/2 >= h*1.05){
+    const c=mkCanvas(cw/2,ch/2), x=c.getContext("2d"); x.imageSmoothingQuality="high"; x.drawImage(cur,0,0,c.width,c.height);
+    cur=c; cw=c.width; ch=c.height;
+  }
+  const out=mkCanvas(w,h), ctx=out.getContext("2d"); ctx.imageSmoothingQuality="high"; ctx.drawImage(cur,0,0,w,h);
+  return out;
+}
+
+/* ================= 自动调色 ================= */
+function analyze(src){
+  const sc=Math.min(1,320/Math.max(srcW(src),srcH(src)));
+  const c=drawScaled(src,srcW(src)*sc,srcH(src)*sc), d=c.getContext("2d").getImageData(0,0,c.width,c.height).data;
+  const hr=new Uint32Array(256),hg=new Uint32Array(256),hb=new Uint32Array(256),hl=new Uint32Array(256);
+  let n=0,sl=0;
+  for(let i=0;i<d.length;i+=4){ if(d[i+3]<128) continue; const r=d[i],g=d[i+1],b=d[i+2],l=(r*77+g*150+b*29)>>8; hr[r]++;hg[g]++;hb[b]++;hl[l]++;sl+=l;n++; }
+  n=n||1; return {hr,hg,hb,hl,n,meanL:sl/n};
+}
+function pct(h,n,p){ const t=n*p; let a=0; for(let i=0;i<256;i++){ a+=h[i]; if(a>=t) return i; } return 255; }
+function buildParams(stats, presetKey){
+  const P=PRESETS[presetKey]||PRESETS.natural, s=presetKey==="none"?0:S.strength/100;
+  const u={b:S.bright/100,c:S.contrast/100,s:S.sat/100,w:S.warm/100};
+  const n=stats.n, clip=(P.clip||.4)/100;
+  const lumLo=pct(stats.hl,n,clip), lumHi=pct(stats.hl,n,1-clip);
+  const hs=[stats.hr,stats.hg,stats.hb], wb=P.wb||0;
+  const bLo=clamp(lumLo,0,36), bHi=clamp(lumHi,212,255);
+  const mL=clamp((stats.meanL-bLo)/(bHi-bLo),.06,.94);
+  let g=clamp(Math.log(.47+(P.bright||0))/Math.log(mL),.72,1.38); g=lerp(1,g,Math.min(1,s)*.85);
+  const gUser = u.b>=0 ? 1/(1+u.b*1.6) : 1+(-u.b)*1.6;
+  const k=(P.contrast||0)*s+u.c*1.2, fade=(P.fade||0)*s, w=(P.warm||0)*s+u.w*.2;
+  const gains=[1+w*.9,1+w*.15,1-w*.9], luts=[];
+  for(let ch=0;ch<3;ch++){
+    const cLo=clamp(pct(hs[ch],n,clip),lumLo-22,lumLo+22), cHi=clamp(pct(hs[ch],n,1-clip),lumHi-22,lumHi+22);
+    let lo=clamp(lerp(lumLo,cLo,wb),0,36), hi=clamp(lerp(lumHi,cHi,wb),212,255);
+    const sl=Math.min(1,s); lo=lerp(0,lo,sl); hi=lerp(255,hi,sl);
+    const lut=new Uint8ClampedArray(256);
+    for(let v=0;v<256;v++){
+      let x=clamp((v-lo)/(hi-lo),0,1); x=Math.pow(x,g*gUser);
+      const sc=x<.5?2*x*x:1-2*(1-x)*(1-x); x=clamp(x+(sc-x)*k,0,1); x=fade+x*(1-fade);
+      lut[v]=x*255*gains[ch];
+    }
+    luts.push(lut);
+  }
+  return {luts, vib:(P.vib||0)*s, sat:(P.sat||0)*s+u.s*1.1};
+}
+const tuneActive = () => S.bright||S.contrast||S.sat||S.warm;
+function applyColor(canvas, stats, presetKey){
+  if (presetKey==="none" && !tuneActive()) return;
+  const p=buildParams(stats,presetKey), ctx=canvas.getContext("2d");
+  const im=ctx.getImageData(0,0,canvas.width,canvas.height), d=im.data, [LR,LG,LB]=p.luts, vib=p.vib, sat=p.sat;
+  const doS=Math.abs(vib)>1e-3||Math.abs(sat)>1e-3;
+  for(let i=0;i<d.length;i+=4){
+    let r=LR[d[i]],g=LG[d[i+1]],b=LB[d[i+2]];
+    if(doS){ const l=.299*r+.587*g+.114*b, mx=Math.max(r,g,b), mn=Math.min(r,g,b), f=1+sat+vib*(1-(mx-mn)/255); r=l+(r-l)*f; g=l+(g-l)*f; b=l+(b-l)*f; }
+    d[i]=r; d[i+1]=g; d[i+2]=b;
+  }
+  ctx.putImageData(im,0,0);
+}
+
+/* ================= 主色调（k-means） ================= */
+function dominantColors(canvas, k=6){
+  const sc=Math.min(1,90/Math.max(canvas.width,canvas.height));
+  const c=drawScaled(canvas,canvas.width*sc,canvas.height*sc), d=c.getContext("2d").getImageData(0,0,c.width,c.height).data;
+  const px=[]; for(let i=0;i<d.length;i+=4) px.push([d[i],d[i+1],d[i+2]]);
+  if(!px.length) return [];
+  let seed=7; const rnd=()=>{ seed=(seed*16807)%2147483647; return seed/2147483647; };
+  const cents=[px[Math.floor(rnd()*px.length)].slice()];
+  const dist=(a,b)=>(a[0]-b[0])**2+(a[1]-b[1])**2+(a[2]-b[2])**2;
+  while(cents.length<k){
+    const ds=px.map(p=>Math.min(...cents.map(c=>dist(p,c)))), tot=ds.reduce((a,b)=>a+b,0);
+    if(!tot) break; let r=rnd()*tot, i=0; while(r>ds[i]&&i<ds.length-1){ r-=ds[i]; i++; } cents.push(px[i].slice());
+  }
+  let lab=new Array(px.length).fill(0);
+  for(let it=0;it<10;it++){
+    for(let i=0;i<px.length;i++){ let b=0,bd=1e18; for(let j=0;j<cents.length;j++){ const dd=dist(px[i],cents[j]); if(dd<bd){bd=dd;b=j;} } lab[i]=b; }
+    const sum=cents.map(()=>[0,0,0,0]);
+    for(let i=0;i<px.length;i++){ const s=sum[lab[i]]; s[0]+=px[i][0]; s[1]+=px[i][1]; s[2]+=px[i][2]; s[3]++; }
+    sum.forEach((s,j)=>{ if(s[3]) cents[j]=[s[0]/s[3],s[1]/s[3],s[2]/s[3]]; });
+  }
+  const cnt=cents.map(()=>0); lab.forEach(l=>cnt[l]++);
+  return cents.map((c,j)=>({hex:toHex(...c), share:cnt[j]/px.length})).filter(x=>x.share>0.01).sort((a,b)=>b.share-a.share);
+}
+
+/* ================= 版式 ================= */
+function layoutFor(w,h){
+  const L=Math.max(w,h);
+  if (S.sizeMode==="uniform"){ const m=S.uniform/100*L; return {cw:w+2*m, ch:h+2*m, l:m, t:m, r:m, b:m}; }
+  if (S.sizeMode==="custom"){ const t=S.cT/100*L,b=S.cB/100*L,l=S.cL/100*L,r=S.cR/100*L; return {cw:w+l+r, ch:h+t+b, l,t,r,b}; }
+  const [rw,rh]=S.ratio.split(":").map(Number), R=rw/rh, m=S.minMargin/100*L;
+  const minW=w+2*m, minH=h+2*m; let cw,ch;
+  if (minW/minH > R){ cw=minW; ch=cw/R; } else { ch=minH; cw=ch*R; }
+  const l=(cw-w)/2, t=(ch-h)/2; return {cw, ch, l, t, r:l, b:t};
+}
+
+/* ================= 状态 ================= */
+let items=[], cur=-1, uid=0;
+const effPreset = it => it.preset==="global" ? S.preset : it.preset;
+function gradedSmall(it){
+  const key=JSON.stringify([effPreset(it),S.strength,S.bright,S.contrast,S.sat,S.warm]);
+  if (it._palKey===key) return it._pal;
+  const sc=Math.min(1,240/Math.max(it.prev.width,it.prev.height));
+  const c=drawScaled(it.prev,it.prev.width*sc,it.prev.height*sc); applyColor(c,it.stats,effPreset(it));
+  it._pal=dominantColors(c); it._palKey=key; return it._pal;
+}
+function borderColorFor(it){
+  if (it.color) return it.color;
+  if (S.colorMode==="auto"){ const p=gradedSmall(it); return p.length ? p[0].hex : "#FFFFFF"; }
+  return S.color;
+}
+
+/* ================= 合成 ================= */
+function paintBg(ctx, W, H, col, photo){
+  if (col==="blur"){
+    const sc=Math.max(W,H), tiny=mkCanvas(24*W/sc,24*H/sc), t=tiny.getContext("2d");
+    const iw=photo.width, ih=photo.height, cs=Math.max(tiny.width/iw,tiny.height/ih);
+    t.drawImage(photo,(tiny.width-iw*cs)/2,(tiny.height-ih*cs)/2,iw*cs,ih*cs);
+    const mid=mkCanvas(tiny.width*5,tiny.height*5), m=mid.getContext("2d"); m.imageSmoothingQuality="high"; m.drawImage(tiny,0,0,mid.width,mid.height);
+    ctx.imageSmoothingQuality="high"; ctx.drawImage(mid,0,0,W,H); ctx.fillStyle="rgba(255,255,255,.18)"; ctx.fillRect(0,0,W,H);
+  } else { ctx.fillStyle=col; ctx.fillRect(0,0,W,H); }
+}
+// 方形拍立得卡片（参考真实 Polaroid 600 / SX-70：照片 316，两侧 18，上 22），整体做成 4:5
+const PW=316, PSIDE=18, PTOP=22, PCARDW=PW+2*PSIDE, PCARDH=PCARDW*5/4, PBOT=PCARDH-PTOP-PW;
+// 真实相纸规格（mm）：卡片宽高、照片窗口宽高、左右边、上边
+const FMTS = {
+  mini:    {name:"Instax Mini",   cw:54,  ch:86,  iw:46, ih:62, side:4,   top:6.5, note:"Instax Mini · 54 × 86 mm, roughly 3:4 image — made for portrait shots"},
+  square:  {name:"Instax Square", cw:72,  ch:86,  iw:62, ih:62, side:5,   top:6.5, note:"Instax Square · 72 × 86 mm, square image"},
+  wide:    {name:"Instax Wide",   cw:108, ch:86,  iw:99, ih:62, side:4.5, top:6.5, note:"Instax Wide · 108 × 86 mm, roughly 3:2 image — made for landscape shots"},
+  polaroid:{name:"Polaroid 600", cw:88,  ch:107, iw:79, ih:79, side:4.5, top:6,   note:"Polaroid 600 · 88 × 107 mm, square image"},
+};
+const igOk = (W,H) => { const r=W/H; return r>=.749 && r<=1.911; };
+function fmtFor(w0,h0){
+  if (S.polFmt!=="auto") return S.polFmt;
+  const a=w0/h0; return a<.9 ? "mini" : a>1.15 ? "wide" : "square";
+}
+function polGeom(w0,h0,outLong,inner){
+  const fk=fmtFor(w0,h0);
+  let g;
+  if (fk==="custom"){
+    const L=Math.max(w0,h0), m=S.polSide/100*L, b=S.polBot/100*L;
+    const cw=w0+2*m, ch=h0+m+b, sc = outLong ? outLong/cw : Math.min(1, 6000/Math.max(cw,ch));
+    g={W:Math.round(cw*sc), H:Math.round(ch*sc), wx:Math.round(m*sc), wy:Math.round(m*sc), WW:Math.round(w0*sc), WH:Math.round(h0*sc), crop:null, fmt:"Custom"};
+  } else {
+    const F=FMTS[fk];
+    // 照片铺满窗口（cover），只裁掉多出来的一点
+    const ar=F.iw/F.ih, sw = w0/h0>ar ? h0*ar : w0, sh = w0/h0>ar ? h0 : w0/ar;
+    const sc = outLong ? outLong/F.cw : Math.min(6000/F.cw, sw/F.iw);
+    g={W:Math.round(F.cw*sc), H:Math.round(F.ch*sc), wx:Math.round(F.side*sc), wy:Math.round(F.top*sc), WW:Math.round(F.iw*sc), WH:Math.round(F.ih*sc),
+       crop:{sw, sh, slX:w0-sw, slY:h0-sh}, fmt:F.name};
+  }
+  g.botPx=g.H-g.wy-g.WH; g.cardW=g.W; g.cardH=g.H; g.ox=0; g.oy=0;
+  g.ok=igOk(g.W,g.H);
+  if (S.unify){ // 统一放到同一比例的背景上
+    const [ur,uh]=S.unify.split(":").map(Number), R=uh/ur;
+    const W2f=Math.max(g.W*1.14, g.H*1.12/R);
+    if (outLong && !inner) return polGeom(w0,h0,outLong*g.cardW/W2f,outLong);
+    const W2=inner||Math.round(W2f), H3=Math.round(W2*R);
+    g.ox=Math.round((W2-g.W)/2); g.oy=Math.round((H3-g.H)/2); g.W=W2; g.H=H3; g.padded=true;
+  }
+  g.sq = !!(g.crop && (g.crop.slX>1||g.crop.slY>1));
+  return g;
+}
+function ratioLabel(W,H){
+  const r=W/H, named=[[1,"1:1"],[.8,"4:5"],[.75,"3:4"],[1.91,"1.91:1"]];
+  for (const [v,n] of named) if (Math.abs(r-v)<.01) return n;
+  return r>=1 ? `${r.toFixed(2)}:1` : `1:${(1/r).toFixed(2)}`;
+}
+function renderPolaroid(src, it, outLong, withColor){
+  const w0=srcW(src), h0=srcH(src), G0=polGeom(w0,h0,outLong);
+  const G={...G0, W:G0.cardW, H:G0.cardH}, W=G.W, H=G.H, {wx,wy,WW,WH}=G;
+  let photo;
+  if (G.crop){
+    const cr=it.crop||{x:.5,y:.5}, {sw,sh,slX,slY}=G.crop;
+    const sx=slX*cr.x, sy=slY*cr.y, f=Math.min(1, WW*2/sw);
+    const tmp=mkCanvas(sw*f, sh*f), tx=tmp.getContext("2d"); tx.imageSmoothingQuality="high";
+    tx.drawImage(src,sx,sy,sw,sh,0,0,tmp.width,tmp.height);
+    photo=drawScaled(tmp,WW,WH);
+  } else photo=drawScaled(src,WW,WH);
+  if (withColor) applyColor(photo,it.stats,effPreset(it));
+  const out=mkCanvas(W,H), ctx=out.getContext("2d"), card=CARD[S.polCard]||CARD.white, dark=S.polCard==="black";
+  const U=Math.max(W,H)/440; // 1 个单位 ≈ 卡片的 1/440
+  // 1) 卡纸底色 + 纸张颗粒
+  ctx.fillStyle=card.fill; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=noisePattern(ctx); ctx.fillRect(0,0,W,H);
+  // 2) 光照：左上亮、右下暗，像一张放在桌上的卡片
+  let g=ctx.createLinearGradient(0,0,W,H);
+  g.addColorStop(0,`rgba(255,255,255,${dark?.10:.45})`); g.addColorStop(.45,"rgba(255,255,255,0)"); g.addColorStop(1,`rgba(0,0,0,${dark?.25:.07})`);
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // 卡纸两侧微微翘起的明暗
+  g=ctx.createLinearGradient(0,0,W,0);
+  g.addColorStop(0,"rgba(0,0,0,.05)"); g.addColorStop(.04,"rgba(0,0,0,0)"); g.addColorStop(.96,"rgba(0,0,0,0)"); g.addColorStop(1,"rgba(0,0,0,.07)");
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // 3) 卡片边缘倒角：上/左高光，下/右暗边
+  const e=Math.max(1,U*1.2);
+  ctx.fillStyle=`rgba(255,255,255,${dark?.18:.9})`; ctx.fillRect(0,0,W,e); ctx.fillRect(0,0,e,H);
+  ctx.fillStyle=`rgba(0,0,0,${dark?.5:.13})`; ctx.fillRect(0,H-e,W,e); ctx.fillRect(W-e,0,e,H);
+  ctx.strokeStyle="rgba(0,0,0,.16)"; ctx.lineWidth=Math.max(1,U*.5); ctx.strokeRect(.5,.5,W-1,H-1);
+  // 4) 照片窗口：嵌在卡纸里
+  ctx.fillStyle="#111"; ctx.fillRect(wx,wy,WW,WH);
+  ctx.drawImage(photo,wx,wy);
+  // 内阴影（光从左上来，上边和左边的阴影更深）
+  ctx.save();
+  ctx.beginPath(); ctx.rect(wx,wy,WW,WH); ctx.clip();
+  ctx.shadowColor="rgba(0,0,0,.55)"; ctx.shadowBlur=U*7; ctx.shadowOffsetX=U*1.6; ctx.shadowOffsetY=U*2.4;
+  ctx.beginPath(); ctx.rect(wx-W,wy-H,WW+2*W,WH+2*H); ctx.rect(wx,wy,WW,WH); ctx.fillStyle="#000"; ctx.fill("evenodd");
+  ctx.restore();
+  // 柔和暗角
+  const rg=ctx.createRadialGradient(wx+WW/2,wy+WH/2,Math.min(WW,WH)*.35,wx+WW/2,wy+WH/2,Math.max(WW,WH)*.75);
+  rg.addColorStop(0,"rgba(0,0,0,0)"); rg.addColorStop(1,"rgba(0,0,0,.16)"); ctx.fillStyle=rg; ctx.fillRect(wx,wy,WW,WH);
+  // 相纸表面的光泽
+  g=ctx.createLinearGradient(wx,wy,wx+WW,wy+WH);
+  g.addColorStop(0,"rgba(255,255,255,.12)"); g.addColorStop(.35,"rgba(255,255,255,0)"); g.addColorStop(.62,"rgba(255,255,255,0)"); g.addColorStop(.7,"rgba(255,255,255,.05)"); g.addColorStop(.8,"rgba(255,255,255,0)");
+  ctx.fillStyle=g; ctx.fillRect(wx,wy,WW,WH);
+  // 窗口边沿：里面一圈暗线，外面右下一圈亮线（压纹感）
+  ctx.lineWidth=Math.max(1,U*.6);
+  ctx.strokeStyle="rgba(0,0,0,.38)"; ctx.strokeRect(wx+.5,wy+.5,WW-1,WH-1);
+  ctx.strokeStyle=`rgba(255,255,255,${dark?.15:.85})`; ctx.beginPath();
+  ctx.moveTo(wx-U*.8, wy+WH+U*.8); ctx.lineTo(wx+WW+U*.8, wy+WH+U*.8); ctx.lineTo(wx+WW+U*.8, wy-U*.8); ctx.stroke();
+  ctx.strokeStyle=`rgba(0,0,0,${dark?.4:.10})`; ctx.beginPath();
+  ctx.moveTo(wx-U*.8, wy+WH+U*.8); ctx.lineTo(wx-U*.8, wy-U*.8); ctx.lineTo(wx+WW+U*.8, wy-U*.8); ctx.stroke();
+  // 5) 底部手写
+  if (it.caption){
+    const fs=Math.round(Math.min(G.botPx*.32, W*.055));
+    ctx.font=`${fs}px "Caveat","Ma Shan Zheng",cursive`; ctx.fillStyle=card.ink; ctx.globalAlpha=.86;
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillText(it.caption, W/2, wy+WH+G.botPx*.5, W*.86);
+    ctx.globalAlpha=1;
+  }
+  if (!G0.padded) return {canvas:out, W, H, m:null, col:null, pol:G0};
+  const fin=mkCanvas(G0.W,G0.H), fx=fin.getContext("2d");
+  fx.fillStyle="#F1EFEA"; fx.fillRect(0,0,fin.width,fin.height);
+  fx.fillStyle=noisePattern(fx); fx.fillRect(0,0,fin.width,fin.height);
+  fx.save(); fx.shadowColor="rgba(0,0,0,.20)"; fx.shadowBlur=fin.width*.03; fx.shadowOffsetY=fin.width*.012; fx.fillStyle="#fff"; fx.fillRect(G0.ox,G0.oy,W,H); fx.restore();
+  fx.save(); fx.shadowColor="rgba(0,0,0,.15)"; fx.shadowBlur=fin.width*.004; fx.shadowOffsetY=fin.width*.002; fx.drawImage(out,G0.ox,G0.oy); fx.restore();
+  return {canvas:fin, W:G0.W, H:G0.H, m:null, col:null, pol:{...G0, wx:G0.wx+G0.ox, wy:G0.wy+G0.oy}};
+}
+function render(src, it, outLong, withColor=true){
+  if (S.sizeMode==="polaroid") return renderPolaroid(src,it,outLong,withColor);
+  const w0=srcW(src), h0=srcH(src), Lo=layoutFor(w0,h0);
+  const s = outLong ? outLong/Lo.cw : 1;
+  const W=Math.round(Lo.cw*s), H=Math.round(Lo.ch*s), iw=Math.round(w0*s), ih=Math.round(h0*s);
+  const x=Math.round(Lo.l*s), y=Math.round(Lo.t*s);
+  const photo=drawScaled(src,iw,ih);
+  if (withColor) applyColor(photo,it.stats,effPreset(it));
+  const out=mkCanvas(W,H), ctx=out.getContext("2d");
+  const col = borderColorFor(it);
+  paintBg(ctx,W,H,col,photo);
+  if (S.shadow && (x>0||y>0)){
+    ctx.save(); ctx.shadowColor="rgba(0,0,0,.22)"; ctx.shadowBlur=Math.max(W,H)*.018; ctx.shadowOffsetY=Math.max(W,H)*.005;
+    ctx.fillStyle="#000"; ctx.fillRect(x,y,iw,ih); ctx.restore();
+  }
+  ctx.drawImage(photo,x,y);
+  return {canvas:out, W, H, m:{t:y, l:x, b:H-y-ih, r:W-x-iw}, col};
+}
+
+/* ================= EXIF ================= */
+function findExif(u8){
+  if (u8[0]!==0xFF||u8[1]!==0xD8) return null;
+  let p=2;
+  while (p+4<u8.length){
+    if (u8[p]!==0xFF) return null;
+    const mk=u8[p+1]; if (mk===0xDA||mk===0xD9) return null;
+    const len=(u8[p+2]<<8)|u8[p+3];
+    if (mk===0xE1 && u8[p+4]===0x45&&u8[p+5]===0x78&&u8[p+6]===0x69&&u8[p+7]===0x66&&u8[p+8]===0&&u8[p+9]===0)
+      return u8.slice(p, p+2+len);
+    p+=2+len;
+  }
+  return null;
+}
+function patchExif(seg, W, H, stripGps){
+  const dv=new DataView(seg.buffer, seg.byteOffset, seg.byteLength), base=10;
+  if (base+8>seg.length) return seg;
+  const le = dv.getUint16(base)===0x4949;
+  const u16=o=>dv.getUint16(base+o,le), u32=o=>dv.getUint32(base+o,le);
+  const w16=(o,v)=>dv.setUint16(base+o,v,le), w32=(o,v)=>dv.setUint32(base+o,v,le);
+  const SZ={1:1,2:1,3:2,4:4,5:8,6:1,7:1,8:2,9:4,10:8,11:4,12:8};
+  const inRange=o=>o>0 && base+o<seg.length-2;
+  const ifd0=u32(4); if (!inRange(ifd0)) return seg;
+  const n0=u16(ifd0);
+  for (let i=0;i<n0;i++){
+    const e=ifd0+2+i*12; if (base+e+12>seg.length) break;
+    const tag=u16(e);
+    if (tag===0x0112) w16(e+8,1);
+    if (tag===0x8769){ // Exif 子 IFD：更新像素尺寸
+      const sub=u32(e+8); if (!inRange(sub)) continue;
+      const ns=u16(sub);
+      for (let j=0;j<ns;j++){ const se=sub+2+j*12; if(base+se+12>seg.length) break; const st=u16(se), ty=u16(se+2);
+        if (st===0xA002||st===0xA003){ const v=st===0xA002?W:H; if(ty===3) w16(se+8,v); else if(ty===4) w32(se+8,v); } }
+    }
+    if (tag===0x8825 && stripGps){
+      const g=u32(e+8); if (!inRange(g)) continue;
+      const ng=u16(g);
+      for (let j=0;j<ng;j++){ const ge=g+2+j*12; if(base+ge+12>seg.length) break;
+        const sz=(SZ[u16(ge+2)]||1)*u32(ge+4);
+        if (sz>4){ const off=u32(ge+8); if (inRange(off)) for(let q=0;q<sz && base+off+q<seg.length;q++) dv.setUint8(base+off+q,0); }
+        for (let q=0;q<12;q++) dv.setUint8(base+ge+q,0);
+      }
+      w16(g,0);
+    }
+  }
+  const nextOff=ifd0+2+n0*12; if (base+nextOff+4<=seg.length) w32(nextOff,0); // 去掉旧缩略图（还是没加框的样子）
+  return seg;
+}
+function insertExif(jpg, seg){
+  const out=new Uint8Array(jpg.length+seg.length);
+  out.set(jpg.subarray(0,2),0); out.set(seg,2); out.set(jpg.subarray(2),2+seg.length);
+  return out;
+}
+
+/* ================= 列表 ================= */
+function renderList(){
+  const list=$("list"); list.innerHTML="";
+  items.forEach((it,i)=>{
+    const el=document.createElement("div"); el.className="li"+(i===cur?" on":"");
+    let thumb;
+    if (it.thumb){ thumb=it.thumb; } else { thumb=document.createElement("div"); thumb.className="ph"; }
+    const t=document.createElement("div"); t.className="t";
+    const nm=document.createElement("div"); nm.className="n"; nm.textContent=it.name;
+    if (it.preset!=="global"||it.color){ const b=document.createElement("span"); b.className="badge"; b.textContent="Custom"; nm.appendChild(b); }
+    const d=document.createElement("div"); d.className="d"; d.textContent = it.err ? it.err : it.prev ? `${it.w} × ${it.h}` : "Loading…";
+    if (it.err) d.style.color="var(--danger)";
+    t.append(nm,d);
+    const x=document.createElement("button"); x.className="x"; x.textContent="✕"; x.title="Remove";
+    x.onclick=e=>{ e.stopPropagation(); removeAt(i); };
+    el.append(thumb,t,x);
+    el.onclick=()=>select(i);
+    list.appendChild(el);
+  });
+  $("count").textContent=items.length||"";
+  const ok=items.filter(i=>i.prev).length;
+  $("exportAll").disabled=!ok; $("exportAll").textContent = ok ? `Export all · ${ok}` : "Export all";
+  $("exportOne").disabled=!(items[cur]&&items[cur].prev);
+}
+function removeAt(i){
+  items.splice(i,1);
+  if (cur>=items.length) cur=items.length-1;
+  renderList(); refreshAll();
+}
+function select(i){ cur=i; renderList(); refreshAll(); }
+
+async function addFiles(files){
+  const list=[...files].filter(f=>f.type.startsWith("image/")||/\.(jpe?g|png|webp|heic|heif|avif|tiff?)$/i.test(f.name));
+  if (!list.length){ toast("No image files found"); return; }
+  const start=items.length;
+  for (const f of list) items.push({id:++uid, file:f, name:f.name, preset:"global", color:null});
+  if (cur<0) cur=start;
+  renderList(); refreshAll();
+  for (const it of items.slice(start)){
+    try {
+      const bmp=await decode(it.file);
+      it.w=srcW(bmp); it.h=srcH(bmp);
+      const sc=Math.min(1,1800/Math.max(it.w,it.h));
+      it.prev=drawScaled(bmp,it.w*sc,it.h*sc); if (bmp.close) bmp.close();
+      it.stats=analyze(it.prev);
+      const ts=96/Math.min(it.prev.width,it.prev.height);
+      it.thumb=drawScaled(it.prev,it.prev.width*ts,it.prev.height*ts);
+    } catch(e){ it.err = /heic|heif/i.test(it.name) ? "HEIC isn't supported here — convert to JPG first" : "Couldn't read this file"; }
+    renderList();
+    if (items[cur]===it) refreshAll();
+    await tick();
+  }
+}
+
+/* ================= 预览 ================= */
+let original=false, picking=false, rafId=0, lastPol=null;
+function refreshAll(){ cancelAnimationFrame(rafId); rafId=requestAnimationFrame(drawPreview); syncColorUI(); }
+function drawPreview(){
+  const it=items[cur], view=$("view");
+  const has = it && it.prev;
+  $("empty").hidden = items.length>0; view.hidden=!has; $("infobar").hidden=!has;
+  $("fname").textContent = it ? it.name : "FRAME LOG";
+  if (!has) return;
+  $("itemPreset").value=it.preset;
+  const r=render(it.prev,it,1100,!original);
+  view.width=r.W; view.height=r.H; view.getContext("2d").drawImage(r.canvas,0,0);
+  lastPol = r.pol || null;
+  $("stage").classList.toggle("drag", !!(r.pol && r.pol.sq) && !picking);
+  if (r.pol){
+    const G=polGeom(it.w,it.h,S.outLong);
+    $("iSize").textContent=`${G.W} × ${G.H}`;
+    $("iMargin").textContent=`${G.fmt} · ${ratioLabel(G.W,G.H)}` + (G.padded ? " · carousel format" : "") + (igOk(G.W,G.H) ? "" : " · taller than 4:5, may be cropped when posted");
+    $("iMargin").className = igOk(G.W,G.H) ? "" : "warn";
+    const fk=fmtFor(it.w,it.h);
+    $("polFmtNote").textContent = fk==="custom" ? "The full photo is kept. Border and bottom are measured as a share of the photo's long edge." : FMTS[fk].note + (G.sq ? ". Drag the photo in the preview to adjust the crop." : ".");
+
+    $("iColor").textContent = `${(CARD[S.polCard]||CARD.white).name} card`;
+    $("caption").value = it.caption||"";
+    return;
+  }
+  // 显示导出尺寸
+  const Lo=layoutFor(it.w,it.h), s=S.outLong? S.outLong/Lo.cw : 1;
+  const W=Math.round(Lo.cw*s), H=Math.round(Lo.ch*s);
+  $("iSize").textContent=`${W} × ${H}`;
+  $("iMargin").textContent=`Margin · ${S.ratio}`; $("iMargin").className="";
+  $("iColor").textContent = r.col==="blur" ? "Blurred backdrop" : r.col;
+}
+
+/* ================= 颜色面板 ================= */
+function syncColorUI(){
+  const it=items[cur];
+  [...$("colorSeg").children].forEach(b=>b.classList.toggle("on", b.dataset.v===S.colorMode));
+  const col = it && it.prev ? borderColorFor(it) : (S.colorMode==="auto" ? "#FFFFFF" : S.color);
+  const bs=$("bigSw");
+  if (col==="blur"){ bs.style.background="linear-gradient(135deg,#9db7c9,#d9c7a7)"; $("hexText").textContent="Blurred"; }
+  else { bs.style.background=col; $("hexText").textContent=col; $("colorPicker").value=col.toLowerCase(); }
+  $("colorNote").textContent = it&&it.color ? "This photo only" : S.colorMode==="auto" ? "Matched to each photo's dominant color" : "Applied to all photos";
+  [...$("swatches").children].forEach(b=>b.classList.toggle("on", b.dataset.v===col));
+  const pal=$("palette"); pal.innerHTML="";
+  if (it && it.prev){
+    for (const p of gradedSmall(it)){
+      const b=document.createElement("button"); b.style.background=p.hex; b.style.flex=String(Math.max(p.share,.06)); b.title=p.hex;
+      if (p.hex===col) b.classList.add("on");
+      b.onclick=()=>pickColor(p.hex); pal.appendChild(b);
+    }
+  }
+  $("onlyCurrent").checked=S.onlyCurrent;
+  $("overrideRow").hidden=!(it&&it.color);
+}
+function pickColor(hex){
+  const it=items[cur];
+  if (S.onlyCurrent && it){ it.color=hex; renderList(); }
+  else { S.color=hex; S.colorMode="single"; saveS(); }
+  refreshAll();
+}
+
+/* ================= 导出 ================= */
+let exporting=false;
+const baseName = n => n.replace(/\.[^.]+$/,"");
+async function exportItems(list){
+  list=list.filter(i=>i&&i.prev);
+  if (!list.length||exporting) return;
+  exporting=true; $("exportAll").disabled=$("exportOne").disabled=true;
+  const bar=$("progress"), fill=bar.querySelector("i"); bar.style.display="block"; fill.style.width="0";
+  try {
+    const out=[], used=new Set();
+    for (let k=0;k<list.length;k++){
+      const it=list[k];
+      if (S.sizeMode==="polaroid" && it.caption) await ensureFont(it.caption);
+      let src; try { src=await decode(it.file); } catch(e){ src=it.prev; }
+      const r=render(src,it,S.outLong,true); if (src.close) src.close();
+      const blob=await new Promise(res=>r.canvas.toBlob(res,"image/jpeg",S.quality));
+      let bytes=new Uint8Array(await blob.arrayBuffer());
+      if (S.keepExif && /jpe?g$/i.test(it.file.type||it.name)){
+        try {
+          const raw=new Uint8Array(await it.file.slice(0, Math.min(it.file.size, 256*1024)).arrayBuffer());
+          let seg=findExif(raw);
+          if (!seg && it.file.size>raw.length) seg=findExif(new Uint8Array(await it.file.arrayBuffer()));
+          if (seg && seg.length<65536) bytes=insertExif(bytes, patchExif(seg, r.W, r.H, S.stripGps));
+        } catch(e){}
+      }
+      let name=baseName(it.name)+(S.suffix||"")+".jpg", n=2;
+      while (used.has(name)) name=baseName(it.name)+(S.suffix||"")+`_${n++}.jpg`;
+      used.add(name); out.push({name, data:bytes});
+      fill.style.width=`${Math.round((k+1)/list.length*100)}%`; await tick();
+    }
+    if (out.length===1) await saveBlob(new Blob([out[0].data],{type:"image/jpeg"}), out[0].name);
+    else {
+      const d=new Date(), st=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`;
+      await saveBlob(makeZip(out), `filmlog_${st}_${out.length}.zip`);
+    }
+  } catch(e){ toast("Export failed: "+e.message); }
+  finally { exporting=false; bar.style.display="none"; renderList(); }
+}
+const CRC_T=(()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=c&1?0xEDB88320^(c>>>1):c>>>1; t[n]=c>>>0; } return t; })();
+function crc32(u){ let c=0xFFFFFFFF; for(let i=0;i<u.length;i++) c=CRC_T[(c^u[i])&255]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function makeZip(files){
+  const enc=new TextEncoder(), parts=[], central=[]; let off=0;
+  const now=new Date(), dt=((now.getHours()<<11)|(now.getMinutes()<<5)|(now.getSeconds()>>1))&0xFFFF,
+        dd=(((now.getFullYear()-1980)<<9)|((now.getMonth()+1)<<5)|now.getDate())&0xFFFF;
+  for (const f of files){
+    const name=enc.encode(f.name), data=f.data, crc=crc32(data);
+    const h=new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true); h.setUint16(4,20,true); h.setUint16(6,0x0800,true); h.setUint16(10,dt,true); h.setUint16(12,dd,true);
+    h.setUint32(14,crc,true); h.setUint32(18,data.length,true); h.setUint32(22,data.length,true); h.setUint16(26,name.length,true);
+    parts.push(h.buffer,name,data);
+    const c=new DataView(new ArrayBuffer(46));
+    c.setUint32(0,0x02014b50,true); c.setUint16(4,20,true); c.setUint16(6,20,true); c.setUint16(8,0x0800,true); c.setUint16(12,dt,true); c.setUint16(14,dd,true);
+    c.setUint32(16,crc,true); c.setUint32(20,data.length,true); c.setUint32(24,data.length,true); c.setUint16(28,name.length,true); c.setUint32(42,off,true);
+    central.push(c.buffer,name); off+=30+name.length+data.length;
+  }
+  const cd=central.reduce((a,p)=>a+(p.byteLength||p.length),0), e=new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true); e.setUint16(8,files.length,true); e.setUint16(10,files.length,true); e.setUint32(12,cd,true); e.setUint32(16,off,true);
+  return new Blob([...parts,...central,e.buffer],{type:"application/zip"});
+}
+
+/* ================= 绑定 UI ================= */
+function onChange(){ saveS(); refreshAll(); syncSizeUI(); }
+function chipGroup(box, entries, isOn, onClick){
+  box.innerHTML="";
+  for (const [label,val] of entries){
+    const b=document.createElement("button"); b.className="chip"; b.textContent=label; b.dataset.v=val;
+    b.onclick=()=>{ onClick(val); }; box.appendChild(b);
+  }
+  return () => [...box.children].forEach(b=>b.classList.toggle("on", isOn(b.dataset.v)));
+}
+const syncPreset = chipGroup($("presetChips"), Object.entries(PRESETS).map(([k,p])=>[p.name,k]), v=>v===S.preset, v=>{ S.preset=v; syncPreset(); onChange(); });
+const syncRatio = chipGroup($("ratioChips"), RATIOS.map(r=>[r,r]), v=>v===S.ratio, v=>{ S.ratio=v; onChange(); });
+// 模式切换
+const modeSeg=$("modeSeg");
+[["Instant film","polaroid"],["Margin","ratio"]].forEach(([l,v])=>{ const b=document.createElement("button"); b.textContent=l; b.dataset.v=v; b.onclick=()=>{ S.sizeMode=v; onChange(); }; modeSeg.appendChild(b); });
+function syncSizeUI(){
+  [...modeSeg.children].forEach(b=>b.classList.toggle("on", b.dataset.v===S.sizeMode));
+  $("modeRatio").hidden=S.sizeMode!=="ratio"; $("modePolaroid").hidden=S.sizeMode!=="polaroid";
+  [...$("polCardChips").children].forEach(b=>b.classList.toggle("on", b.dataset.v===S.polCard));
+  [...$("polFmtChips").children].forEach(b=>b.classList.toggle("on", b.dataset.v===S.polFmt));
+  $("polCustom").hidden = S.polFmt!=="custom";
+  [...$("unifyChips").children].forEach(b=>b.classList.toggle("on", b.dataset.v===S.unify));
+  $("colorCard").hidden = S.sizeMode==="polaroid";
+  syncRatio(); syncPreset();
+}
+for (const [k,l] of [["auto","Auto"],["mini","Instax Mini"],["square","Instax Square"],["wide","Instax Wide"],["polaroid","Polaroid 600"],["custom","Custom"]]){
+  const b=document.createElement("button"); b.className="chip"; b.textContent=l; b.dataset.v=k; b.onclick=()=>{ S.polFmt=k; onChange(); }; $("polFmtChips").appendChild(b);
+}
+for (const [k,l] of [["","Off"],["1:1","1:1"],["4:5","4:5"],["3:4","3:4"]]){
+  const b=document.createElement("button"); b.className="chip"; b.textContent=l; b.dataset.v=k; b.onclick=()=>{ S.unify=k; onChange(); }; $("unifyChips").appendChild(b);
+}
+for (const [k,c] of Object.entries(CARD)){ const b=document.createElement("button"); b.className="chip"; b.textContent=c.name; b.dataset.v=k; b.onclick=()=>{ S.polCard=k; onChange(); }; $("polCardChips").appendChild(b); }
+async function ensureFont(text){
+  if (!text || !document.fonts) return;
+  try { await Promise.all([document.fonts.load(`40px "Caveat"`, text), document.fonts.load(`40px "Ma Shan Zheng"`, text)]); } catch(e){}
+}
+$("caption").addEventListener("input", async e=>{
+  const it=items[cur]; if(!it) return; it.caption=e.target.value; refreshAll();
+  await ensureFont(it.caption); refreshAll();
+});
+// 拖动调整拍立得取景
+let drag=null;
+$("view").addEventListener("pointerdown", e=>{
+  const it=items[cur];
+  if (picking || !lastPol || !lastPol.sq || !it) return;
+  drag={x:e.clientX, y:e.clientY, crop:{...(it.crop||{x:.5,y:.5})}, it};
+  $("view").setPointerCapture(e.pointerId); $("stage").classList.add("dragging");
+});
+$("view").addEventListener("pointermove", e=>{
+  if (!drag) return;
+  const v=$("view"), css=v.getBoundingClientRect().width/v.width, winCss=lastPol.WW*css;
+  const it=drag.it, G=polGeom(it.w,it.h,0), {sw,slX,slY}=G.crop||{sw:1,slX:0,slY:0};
+  const dx=(e.clientX-drag.x)/winCss*sw, dy=(e.clientY-drag.y)/winCss*sw;
+  it.crop={ x: slX>1? clamp(drag.crop.x - dx/slX,0,1) : .5, y: slY>1? clamp(drag.crop.y - dy/slY,0,1) : .5 };
+  refreshAll();
+});
+const endDrag=()=>{ if(drag){ drag=null; $("stage").classList.remove("dragging"); } };
+$("view").addEventListener("pointerup", endDrag); $("view").addEventListener("pointercancel", endDrag);
+const colorSeg=$("colorSeg");
+[["One color","single"],["From photo","auto"]].forEach(([l,v])=>{ const b=document.createElement("button"); b.textContent=l; b.dataset.v=v; b.onclick=()=>{ S.colorMode=v; onChange(); }; colorSeg.appendChild(b); });
+for (const c of SWATCHES){
+  const b=document.createElement("button"); b.className="sw"+(c==="blur"?" blur":""); b.dataset.v=c; b.title=c==="blur"?"Blurred backdrop":c;
+  if (c!=="blur") b.style.background=c; else b.textContent="Blur";
+  b.onclick=()=>pickColor(c); $("swatches").appendChild(b);
+}
+$("colorPicker").addEventListener("input", e=>pickColor(e.target.value.toUpperCase()));
+$("onlyCurrent").onchange=e=>{ S.onlyCurrent=e.target.checked; saveS(); };
+$("clearOverride").onclick=()=>{ const it=items[cur]; if(it){ it.color=null; renderList(); refreshAll(); } };
+$("pickBtn").onclick=()=>{
+  if (!items[cur]||!items[cur].prev) return;
+  picking=!picking; $("stage").classList.toggle("pick",picking); $("pickBtn").classList.toggle("primary",picking);
+  if (picking) toast("Click the photo to sample a color");
+};
+$("view").addEventListener("click", e=>{
+  if (!picking) return;
+  const v=$("view"), rc=v.getBoundingClientRect();
+  const x=Math.floor((e.clientX-rc.left)/rc.width*v.width), y=Math.floor((e.clientY-rc.top)/rc.height*v.height);
+  const d=v.getContext("2d").getImageData(clamp(x-2,0,v.width-5),clamp(y-2,0,v.height-5),5,5).data;
+  let r=0,g=0,b=0; for(let i=0;i<d.length;i+=4){ r+=d[i]; g+=d[i+1]; b+=d[i+2]; }
+  picking=false; $("stage").classList.remove("pick"); $("pickBtn").classList.remove("primary");
+  pickColor(toHex(r/25,g/25,b/25));
+});
+
+const RANGES={strength:v=>v+"%",bright:sg,contrast:sg,sat:sg,warm:sg,minMargin:pc,polSide:pc,polBot:pc};
+function sg(v){ return (v>0?"+":"")+v; } function pc(v){ return v+"%"; }
+function syncRanges(){ for (const [id,f] of Object.entries(RANGES)){ $(id).value=S[id]; $(id).parentElement.querySelector("output").textContent=f(S[id]); } }
+for (const [id,f] of Object.entries(RANGES)){
+  $(id).addEventListener("input", e=>{ S[id]=parseFloat(e.target.value); e.target.parentElement.querySelector("output").textContent=f(S[id]); onChange(); });
+}
+syncRanges();
+$("resetTune").onclick=()=>{ Object.assign(S,{strength:100,bright:0,contrast:0,sat:0,warm:0}); syncRanges(); onChange(); };
+const ip=$("itemPreset"); ip.innerHTML=`<option value="global">Same as all</option>`+Object.entries(PRESETS).map(([k,p])=>`<option value="${k}">${p.name}</option>`).join("");
+ip.onchange=()=>{ const it=items[cur]; if(it){ it.preset=ip.value; renderList(); refreshAll(); } };
+const bindSel=(id,key,num)=>{ const el=$(id); el.value=String(S[key]); el.onchange=()=>{ S[key]=num?parseFloat(el.value):el.value; onChange(); }; };
+bindSel("outLong","outLong",true); bindSel("quality","quality",true);
+$("suffix").value=S.suffix; $("suffix").addEventListener("input", e=>{ S.suffix=e.target.value.replace(/[\\/:*?"<>|]/g,""); saveS(); });
+for (const id of ["shadow","keepExif","stripGps"]){ $(id).checked=S[id]; $(id).onchange=e=>{ S[id]=e.target.checked; onChange(); }; }
+
+// 对比原图
+const cmp=$("cmpBtn");
+const down=e=>{ if(e) e.preventDefault(); if(original) return; original=true; drawPreview(); cmp.textContent="Original · release to return"; };
+const up=()=>{ if(!original) return; original=false; drawPreview(); cmp.textContent="Hold to compare"; };
+cmp.addEventListener("pointerdown",down); cmp.addEventListener("pointerup",up); cmp.addEventListener("pointerleave",up);
+document.addEventListener("keydown", e=>{
+  if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+  if (e.key===" "){ down(e); }
+  else if ((e.key==="ArrowDown"||e.key==="ArrowRight") && items.length){ e.preventDefault(); select(Math.min(items.length-1,cur+1)); }
+  else if ((e.key==="ArrowUp"||e.key==="ArrowLeft") && items.length){ e.preventDefault(); select(Math.max(0,cur-1)); }
+  else if (e.key==="Escape" && picking){ $("pickBtn").click(); }
+});
+document.addEventListener("keyup", e=>{ if (e.key===" ") up(); });
+
+// 添加 / 拖放 / 粘贴
+const fi=$("file");
+$("addBtn").onclick=()=>fi.click(); $("empty").onclick=()=>fi.click();
+fi.addEventListener("change", e=>{ addFiles(e.target.files); e.target.value=""; });
+let dragN=0;
+document.addEventListener("dragenter", e=>{ e.preventDefault(); dragN++; $("dropmask").classList.add("show"); });
+document.addEventListener("dragover", e=>e.preventDefault());
+document.addEventListener("dragleave", e=>{ e.preventDefault(); if(--dragN<=0){ dragN=0; $("dropmask").classList.remove("show"); } });
+document.addEventListener("drop", e=>{ e.preventDefault(); dragN=0; $("dropmask").classList.remove("show"); if (e.dataTransfer&&e.dataTransfer.files.length) addFiles(e.dataTransfer.files); });
+document.addEventListener("paste", e=>{ const f=[...(e.clipboardData&&e.clipboardData.files||[])]; if (f.length) addFiles(f); });
+$("clearBtn").onclick=()=>{ items=[]; cur=-1; renderList(); refreshAll(); };
+$("exportAll").onclick=()=>exportItems(items);
+$("exportOne").onclick=()=>exportItems([items[cur]]);
+
+syncSizeUI(); renderList(); refreshAll();
+})();
+</script>
+</body>
+</html>
