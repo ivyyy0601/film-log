@@ -156,7 +156,7 @@
         <span class="eyebrow">Start here</span>
         <strong>Drop photos here, or click to browse</strong>
         Import a batch at once — color and framing are applied automatically
-        <span class="hint">JPG · PNG · WebP　|　Processed locally in your browser</span>
+        <span class="hint">JPG · PNG · WebP · RAW (DNG, ARW, CR2…)　|　Processed locally in your browser</span>
       </label>
       <canvas id="view" hidden></canvas>
     </div>
@@ -246,7 +246,7 @@
     </div>
   </section>
 </div>
-<input type="file" id="file" accept="image/*" multiple hidden>
+<input type="file" id="file" accept="image/*,.dng,.arw,.cr2,.cr3,.nef,.nrw,.orf,.rw2,.raf,.pef,.srw" multiple hidden>
 <div class="dropmask" id="dropmask">Drop to add photos</div>
 <div class="toast" id="toast"></div>
 
@@ -320,13 +320,82 @@ async function saveBlob(blob, filename){
 }
 
 /* ================= 图像基础 ================= */
-async function decode(file){
+const RAW_RE=/\.(dng|arw|cr2|cr3|nef|nrw|orf|rw2|raf|pef|srw|3fr|erf|kdc|mrw|iiq|x3f)$/i;
+const isRaw = f => RAW_RE.test(f.name);
+async function decodeStd(file){
   try { return await createImageBitmap(file, {imageOrientation:"from-image"}); }
   catch(e){
     const url = URL.createObjectURL(file);
     try { const img=new Image(); img.src=url; await img.decode(); return img; }
     finally { setTimeout(()=>URL.revokeObjectURL(url),1000); }
   }
+}
+async function decode(file){
+  if (isRaw(file)) return decodeRaw(file);
+  try { return await decodeStd(file); }
+  catch(e){ return decodeRaw(file); }   // 万一扩展名不认识，但其实是 RAW
+}
+
+/* ---------- RAW（DNG / ARW / CR2 / NEF …）：取出相机内嵌的 JPEG 预览 ---------- */
+// 在 JPEG 码流里找 SOF 段，读出宽高；只认浏览器能解的 baseline / progressive
+function jpegInfo(u8, p){
+  if (u8[p]!==0xFF||u8[p+1]!==0xD8) return null;
+  let i=p+2, orient=0;
+  while (i+9<u8.length){
+    if (u8[i]!==0xFF){ return null; }
+    const m=u8[i+1];
+    if (m===0xD8||m===0x01||(m>=0xD0&&m<=0xD7)){ i+=2; continue; }
+    if (m===0xD9||m===0xDA) return null;
+    const len=(u8[i+2]<<8)|u8[i+3];
+    if (len<2) return null;
+    if (m===0xE1 && u8[i+4]===0x45 && u8[i+5]===0x78) orient=exifOrient(u8,i+10,i+2+len);
+    if (m===0xC0||m===0xC1||m===0xC2){
+      const h=(u8[i+5]<<8)|u8[i+6], w=(u8[i+7]<<8)|u8[i+8];
+      return {w,h,orient};
+    }
+    if (m>=0xC3&&m<=0xCF&&m!==0xC4&&m!==0xC8&&m!==0xCC) return null; // 无损 JPEG 等，浏览器解不了
+    i+=2+len;
+  }
+  return null;
+}
+function tiffOrient(u8,base,end){
+  try{
+    const dv=new DataView(u8.buffer,u8.byteOffset);
+    const le=dv.getUint16(base)===0x4949; if(!le && dv.getUint16(base)!==0x4D4D) return 0;
+    const ifd=dv.getUint32(base+4,le), n=dv.getUint16(base+ifd,le);
+    for(let k=0;k<n;k++){ const e=base+ifd+2+k*12; if(e+12>end) break; if(dv.getUint16(e,le)===0x0112) return dv.getUint16(e+8,le); }
+  }catch(e){}
+  return 0;
+}
+const exifOrient=(u8,base,end)=>tiffOrient(u8,base,end);
+async function decodeRaw(file){
+  const u8=new Uint8Array(await file.arrayBuffer());
+  const fileOrient = (u8[0]===0x49&&u8[1]===0x49)||(u8[0]===0x4D&&u8[1]===0x4D) ? tiffOrient(u8,0,Math.min(u8.length,1<<20)) : 0;
+  let best=null;
+  for (let p=0;p<u8.length-3;p++){
+    if (u8[p]===0xFF && u8[p+1]===0xD8 && u8[p+2]===0xFF){
+      const info=jpegInfo(u8,p);
+      if (info && (!best || info.w*info.h>best.w*best.h)) best={...info,p};
+    }
+  }
+  if (!best || best.w<300) throw new Error("no preview");
+  const bmp=await createImageBitmap(new Blob([u8.subarray(best.p)],{type:"image/jpeg"}), {imageOrientation:"none"});
+  const o = best.orient || fileOrient || 1;
+  if (o===1) return bmp;
+  const swap = o>=5;
+  const c=mkCanvas(swap?bmp.height:bmp.width, swap?bmp.width:bmp.height), x=c.getContext("2d");
+  const W=bmp.width, H=bmp.height;
+  switch(o){
+    case 2: x.transform(-1,0,0,1,W,0); break;
+    case 3: x.transform(-1,0,0,-1,W,H); break;
+    case 4: x.transform(1,0,0,-1,0,H); break;
+    case 5: x.transform(0,1,1,0,0,0); break;
+    case 6: x.transform(0,1,-1,0,H,0); break;
+    case 7: x.transform(0,-1,-1,0,H,W); break;
+    case 8: x.transform(0,-1,1,0,0,W); break;
+  }
+  x.drawImage(bmp,0,0); bmp.close&&bmp.close();
+  return c;
 }
 const srcW = s => s.naturalWidth || s.width, srcH = s => s.naturalHeight || s.height;
 function drawScaled(src, w, h){
@@ -671,7 +740,7 @@ function removeAt(i){
 function select(i){ cur=i; renderList(); refreshAll(); }
 
 async function addFiles(files){
-  const list=[...files].filter(f=>f.type.startsWith("image/")||/\.(jpe?g|png|webp|heic|heif|avif|tiff?)$/i.test(f.name));
+  const list=[...files].filter(f=>f.type.startsWith("image/")||/\.(jpe?g|png|webp|heic|heif|avif|tiff?)$/i.test(f.name)||RAW_RE.test(f.name));
   if (!list.length){ toast("No image files found"); return; }
   const start=items.length;
   for (const f of list) items.push({id:++uid, file:f, name:f.name, preset:"global", color:null});
@@ -686,7 +755,7 @@ async function addFiles(files){
       it.stats=analyze(it.prev);
       const ts=96/Math.min(it.prev.width,it.prev.height);
       it.thumb=drawScaled(it.prev,it.prev.width*ts,it.prev.height*ts);
-    } catch(e){ it.err = /heic|heif/i.test(it.name) ? "HEIC isn't supported here — convert to JPG first" : "Couldn't read this file"; }
+    } catch(e){ it.err = /heic|heif/i.test(it.name) ? "HEIC isn't supported here — convert to JPG first" : isRaw(it.file) ? "No usable preview inside this RAW file" : "Couldn't read this file"; }
     renderList();
     if (items[cur]===it) refreshAll();
     await tick();
