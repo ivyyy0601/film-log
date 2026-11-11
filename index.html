@@ -215,6 +215,8 @@
     <div class="settings">
       <div class="sec">
         <div class="sec-head"><h2>Color</h2><button class="textbtn" id="resetTune">Reset</button></div>
+        <div class="seg" id="scopeSeg"></div>
+        <p class="note" id="scopeNote" style="margin:0 0 10px"></p>
         <div class="chips" id="presetChips"></div>
         <div class="row" style="margin-top:12px"><label>Strength</label><input type="range" id="strength" min="0" max="150" value="100"><output></output></div>
         <details>
@@ -224,7 +226,6 @@
           <div class="row"><label>Saturation</label><input type="range" id="sat" min="-30" max="30" value="0"><output></output></div>
           <div class="row"><label>Warmth</label><input type="range" id="warm" min="-30" max="30" value="0"><output></output></div>
         </details>
-        <div class="kv" style="margin-top:12px"><span>This photo</span><select id="itemPreset"></select></div>
       </div>
 
       <div class="sec">
@@ -462,9 +463,10 @@ function analyze(src){
   n=n||1; return {hr,hg,hb,hl,n,meanL:sl/n};
 }
 function pct(h,n,p){ const t=n*p; let a=0; for(let i=0;i<256;i++){ a+=h[i]; if(a>=t) return i; } return 255; }
-function buildParams(stats, presetKey){
-  const P=PRESETS[presetKey]||PRESETS.natural, s=presetKey==="none"?0:S.strength/100;
-  const u={b:S.bright/100,c:S.contrast/100,s:S.sat/100,w:S.warm/100};
+function buildParams(stats, C){
+  const presetKey=C.preset;
+  const P=PRESETS[presetKey]||PRESETS.natural, s=presetKey==="none"?0:C.strength/100;
+  const u={b:C.bright/100,c:C.contrast/100,s:C.sat/100,w:C.warm/100};
   const n=stats.n, clip=(P.clip||.4)/100;
   const lumLo=pct(stats.hl,n,clip), lumHi=pct(stats.hl,n,1-clip);
   const hs=[stats.hr,stats.hg,stats.hb], wb=P.wb||0;
@@ -488,10 +490,10 @@ function buildParams(stats, presetKey){
   }
   return {luts, vib:(P.vib||0)*s, sat:(P.sat||0)*s+u.s*1.1};
 }
-const tuneActive = () => S.bright||S.contrast||S.sat||S.warm;
-function applyColor(canvas, stats, presetKey){
-  if (presetKey==="none" && !tuneActive()) return;
-  const p=buildParams(stats,presetKey), ctx=canvas.getContext("2d");
+const tuneActive = C => C.bright||C.contrast||C.sat||C.warm;
+function applyColor(canvas, stats, C){
+  if (C.preset==="none" && !tuneActive(C)) return;
+  const p=buildParams(stats,C), ctx=canvas.getContext("2d");
   const im=ctx.getImageData(0,0,canvas.width,canvas.height), d=im.data, [LR,LG,LB]=p.luts, vib=p.vib, sat=p.sat;
   const doS=Math.abs(vib)>1e-3||Math.abs(sat)>1e-3;
   for(let i=0;i<d.length;i+=4){
@@ -539,12 +541,20 @@ function layoutFor(w,h){
 
 /* ================= 状态 ================= */
 let items=[], cur=-1, uid=0;
-const effPreset = it => it.preset==="global" ? S.preset : it.preset;
+const COLOR_KEYS=["preset","strength","bright","contrast","sat","warm"];
+const colorOf = it => (it && it.adj) ? it.adj : S;          // 每张照片自己的调色，没有就跟随全部
+let scope="all";                                            // "all" | "this"
+const viewC = () => scope==="this" && items[cur] ? colorOf(items[cur]) : S;
+function editC(){                                           // 当前要改的那份调色设置
+  const it=items[cur];
+  if (scope==="this" && it){ if (!it.adj){ it.adj=Object.fromEntries(COLOR_KEYS.map(k=>[k,S[k]])); renderList(); } return it.adj; }
+  return S;
+}
 function gradedSmall(it){
-  const key=JSON.stringify([effPreset(it),S.strength,S.bright,S.contrast,S.sat,S.warm]);
+  const key=JSON.stringify(COLOR_KEYS.map(k=>colorOf(it)[k]));
   if (it._palKey===key) return it._pal;
   const sc=Math.min(1,240/Math.max(it.prev.width,it.prev.height));
-  const c=drawScaled(it.prev,it.prev.width*sc,it.prev.height*sc); applyColor(c,it.stats,effPreset(it));
+  const c=drawScaled(it.prev,it.prev.width*sc,it.prev.height*sc); applyColor(c,it.stats,colorOf(it));
   it._pal=dominantColors(c); it._palKey=key; return it._pal;
 }
 function borderColorFor(it){
@@ -620,7 +630,7 @@ function renderPolaroid(src, it, outLong, withColor){
     tx.drawImage(src,sx,sy,sw,sh,0,0,tmp.width,tmp.height);
     photo=drawScaled(tmp,WW,WH);
   } else photo=drawScaled(src,WW,WH);
-  if (withColor) applyColor(photo,it.stats,effPreset(it));
+  if (withColor) applyColor(photo,it.stats,colorOf(it));
   const out=mkCanvas(W,H), ctx=out.getContext("2d"), card=CARD[S.polCard]||CARD.white, dark=S.polCard==="black";
   const U=Math.max(W,H)/440; // 1 个单位 ≈ 卡片的 1/440
   // 1) 卡纸底色 + 纸张颗粒
@@ -685,7 +695,7 @@ function render(src, it, outLong, withColor=true){
   const W=Math.round(Lo.cw*s), H=Math.round(Lo.ch*s), iw=Math.round(w0*s), ih=Math.round(h0*s);
   const x=Math.round(Lo.l*s), y=Math.round(Lo.t*s);
   const photo=drawScaled(src,iw,ih);
-  if (withColor) applyColor(photo,it.stats,effPreset(it));
+  if (withColor) applyColor(photo,it.stats,colorOf(it));
   const out=mkCanvas(W,H), ctx=out.getContext("2d");
   const col = borderColorFor(it);
   paintBg(ctx,W,H,col,photo);
@@ -760,7 +770,7 @@ function renderList(){
     if (it.thumb){ thumb=it.thumb; } else { thumb=document.createElement("div"); thumb.className="ph"; }
     const t=document.createElement("div"); t.className="t";
     const nm=document.createElement("div"); nm.className="n"; nm.textContent=it.name;
-    if (it.preset!=="global"||it.color){ const b=document.createElement("span"); b.className="badge"; b.textContent="Custom"; nm.appendChild(b); }
+    if (it.adj||it.color){ const b=document.createElement("span"); b.className="badge"; b.textContent="Custom"; nm.appendChild(b); }
     const d=document.createElement("div"); d.className="d"; d.textContent = it.err ? it.err : it.prev ? `${it.w} × ${it.h}` + (it.cropRect ? " · cropped" : "") : "Loading…";
     if (it.err) d.style.color="var(--danger)";
     t.append(nm,d);
@@ -774,6 +784,7 @@ function renderList(){
   const ok=items.filter(i=>i.prev).length;
   $("exportAll").disabled=!ok; $("exportAll").textContent = ok ? `Export all · ${ok}` : "Export all";
   $("exportOne").disabled=!(items[cur]&&items[cur].prev);
+  if (typeof scopeSeg!=="undefined") syncScope();
 }
 function removeAt(i){
   items.splice(i,1);
@@ -839,7 +850,7 @@ function openCrop(){
   const rN=it.cropRect;
   CS={it, W, H, key:"free", r: rN ? {x:rN.x*W,y:rN.y*H,w:rN.w*W,h:rN.h*H} : {x:0,y:0,w:W,h:H}};
   // 画面：显示调过色的原图（未裁）
-  const disp=drawScaled(img,W,H); applyColor(disp,it.stats0||it.stats,effPreset(it));
+  const disp=drawScaled(img,W,H); applyColor(disp,it.stats0||it.stats,colorOf(it));
   CS.disp=disp;
   $("fname").textContent="Drag to move · drag outside to redraw · scroll to zoom";
   $("view").hidden=true; $("infobar").hidden=true; $("cropbar").hidden=false; $("cropper").hidden=false;
@@ -983,7 +994,6 @@ function drawPreview(){
   $("empty").hidden = items.length>0; view.hidden=!has; $("infobar").hidden=!has;
   $("fname").textContent = it ? it.name : "FRAME LOG";
   if (!has) return;
-  $("itemPreset").value=it.preset;
   const r=render(it.prev,it,1100,!original);
   view.width=r.W; view.height=r.H; view.getContext("2d").drawImage(r.canvas,0,0);
   lastPol = r.pol || null;
@@ -1098,7 +1108,7 @@ function makeZip(files){
 }
 
 /* ================= 绑定 UI ================= */
-function onChange(){ saveS(); refreshAll(); syncSizeUI(); }
+function onChange(){ saveS(); refreshAll(); syncSizeUI(); syncScope(); }
 function chipGroup(box, entries, isOn, onClick){
   box.innerHTML="";
   for (const [label,val] of entries){
@@ -1107,7 +1117,7 @@ function chipGroup(box, entries, isOn, onClick){
   }
   return () => [...box.children].forEach(b=>b.classList.toggle("on", isOn(b.dataset.v)));
 }
-const syncPreset = chipGroup($("presetChips"), Object.entries(PRESETS).map(([k,p])=>[p.name,k]), v=>v===S.preset, v=>{ S.preset=v; syncPreset(); onChange(); });
+const syncPreset = chipGroup($("presetChips"), Object.entries(PRESETS).map(([k,p])=>[p.name,k]), v=>v===viewC().preset, v=>{ editC().preset=v; syncPreset(); onChange(); });
 const syncRatio = chipGroup($("ratioChips"), RATIOS.map(r=>[r,r]), v=>v===S.ratio, v=>{ S.ratio=v; onChange(); });
 // 模式切换
 const modeSeg=$("modeSeg");
@@ -1182,14 +1192,35 @@ $("view").addEventListener("click", e=>{
 
 const RANGES={strength:v=>v+"%",bright:sg,contrast:sg,sat:sg,warm:sg,minMargin:pc,polSide:pc,polBot:pc};
 function sg(v){ return (v>0?"+":"")+v; } function pc(v){ return v+"%"; }
-function syncRanges(){ for (const [id,f] of Object.entries(RANGES)){ $(id).value=S[id]; $(id).parentElement.querySelector("output").textContent=f(S[id]); } }
+const srcOf = id => COLOR_KEYS.includes(id) ? viewC() : S;
+function syncRanges(){ for (const [id,f] of Object.entries(RANGES)){ const v=srcOf(id)[id]; $(id).value=v; $(id).parentElement.querySelector("output").textContent=f(v); } }
 for (const [id,f] of Object.entries(RANGES)){
-  $(id).addEventListener("input", e=>{ S[id]=parseFloat(e.target.value); e.target.parentElement.querySelector("output").textContent=f(S[id]); onChange(); });
+  $(id).addEventListener("input", e=>{
+    const v=parseFloat(e.target.value);
+    const T = COLOR_KEYS.includes(id) ? editC() : S;
+    T[id]=v; e.target.value=v; e.target.parentElement.querySelector("output").textContent=f(v); onChange();
+  });
 }
 syncRanges();
-$("resetTune").onclick=()=>{ Object.assign(S,{strength:100,bright:0,contrast:0,sat:0,warm:0}); syncRanges(); onChange(); };
-const ip=$("itemPreset"); ip.innerHTML=`<option value="global">Same as all</option>`+Object.entries(PRESETS).map(([k,p])=>`<option value="${k}">${p.name}</option>`).join("");
-ip.onchange=()=>{ const it=items[cur]; if(it){ it.preset=ip.value; renderList(); refreshAll(); } };
+$("resetTune").onclick=()=>{
+  const it=items[cur];
+  if (scope==="this" && it){ it.adj=null; renderList(); }
+  else Object.assign(S,{preset:"natural",strength:100,bright:0,contrast:0,sat:0,warm:0});
+  syncScope(); onChange();
+};
+// 范围切换：All photos / This photo
+const scopeSeg=$("scopeSeg");
+[["All photos","all"],["This photo","this"]].forEach(([l,v])=>{ const b=document.createElement("button"); b.textContent=l; b.dataset.v=v; b.onclick=()=>{ scope=v; syncScope(); }; scopeSeg.appendChild(b); });
+function syncScope(){
+  [...scopeSeg.children].forEach(b=>b.classList.toggle("on", b.dataset.v===scope));
+  const it=items[cur], n=items.filter(i=>i.adj).length;
+  let t;
+  if (scope==="this") t = !it ? "Select a photo to edit it on its own." : it.adj ? "Editing this photo only. Reset to follow all photos again." : "Changes here apply to this photo only.";
+  else t = n ? `Applies to every photo except ${n} with custom color.` : "Applies to every photo.";
+  $("scopeNote").textContent=t;
+  $("resetTune").textContent = scope==="this" ? "Reset photo" : "Reset";
+  syncPreset(); syncRanges();
+}
 const bindSel=(id,key,num)=>{ const el=$(id); el.value=String(S[key]); el.onchange=()=>{ S[key]=num?parseFloat(el.value):el.value; onChange(); }; };
 bindSel("outLong","outLong",true); bindSel("quality","quality",true);
 $("suffix").value=S.suffix; $("suffix").addEventListener("input", e=>{ S.suffix=e.target.value.replace(/[\\/:*?"<>|]/g,""); saveS(); });
