@@ -73,6 +73,28 @@
   .empty{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--muted);text-align:center;background:#fff;border:1px dashed #b9c7d9;border-radius:13px;padding:44px 40px;cursor:pointer;max-width:440px;box-shadow:var(--shadow);font-size:14px}
   .empty strong{color:var(--ink2);font-size:17px;font-weight:650}
   .empty .hint{font-size:12.5px;color:var(--faint)}
+  /* crop editor */
+  .cropper{position:relative;touch-action:none;user-select:none;box-shadow:var(--shadow-lg);overflow:hidden;line-height:0}
+  .cropper canvas{display:block}
+  .cbox{position:absolute;border:1.5px solid #fff;box-shadow:0 0 0 9999px rgba(15,20,25,.55);cursor:move;
+    background-image:linear-gradient(to right,transparent calc(33.33% - .5px),rgba(255,255,255,.45) calc(33.33% - .5px),rgba(255,255,255,.45) calc(33.33% + .5px),transparent calc(33.33% + .5px),transparent calc(66.66% - .5px),rgba(255,255,255,.45) calc(66.66% - .5px),rgba(255,255,255,.45) calc(66.66% + .5px),transparent calc(66.66% + .5px)),
+    linear-gradient(to bottom,transparent calc(33.33% - .5px),rgba(255,255,255,.45) calc(33.33% - .5px),rgba(255,255,255,.45) calc(33.33% + .5px),transparent calc(33.33% + .5px),transparent calc(66.66% - .5px),rgba(255,255,255,.45) calc(66.66% - .5px),rgba(255,255,255,.45) calc(66.66% + .5px),transparent calc(66.66% + .5px))}
+  .ch{position:absolute;width:18px;height:18px;border:3px solid #fff;background:transparent}
+  .ch[data-h=nw]{left:-3px;top:-3px;border-right:0;border-bottom:0;cursor:nwse-resize}
+  .ch[data-h=ne]{right:-3px;top:-3px;border-left:0;border-bottom:0;cursor:nesw-resize}
+  .ch[data-h=sw]{left:-3px;bottom:-3px;border-right:0;border-top:0;cursor:nesw-resize}
+  .ch[data-h=se]{right:-3px;bottom:-3px;border-left:0;border-top:0;cursor:nwse-resize}
+  .ce{position:absolute;background:#fff;border-radius:2px}
+  .ce[data-h=n],.ce[data-h=s]{width:26px;height:4px;left:calc(50% - 13px);cursor:ns-resize}
+  .ce[data-h=n]{top:-2px}.ce[data-h=s]{bottom:-2px}
+  .ce[data-h=e],.ce[data-h=w]{height:26px;width:4px;top:calc(50% - 13px);cursor:ew-resize}
+  .ce[data-h=e]{right:-2px}.ce[data-h=w]{left:-2px}
+  .ch::after,.ce::after{content:"";position:absolute;inset:-12px}
+  .cropbar{display:flex;flex-direction:column;align-items:center;gap:10px;padding-bottom:6px}
+  .cropbar .chips{justify-content:center}
+  .cropbar .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center}
+  .cropbar .actions button{border-radius:24px;padding:7px 16px;font-size:13.5px}
+  .cropbar .dim{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:90px;text-align:center}
   .dropmask{position:fixed;inset:0;background:#29483d14;border:3px dashed var(--forest);display:none;z-index:40;align-items:center;justify-content:center;font-size:18px;color:var(--forest);font-weight:600}
   .dropmask.show{display:flex}
 
@@ -159,12 +181,26 @@
         <span class="hint">JPG · PNG · WebP · RAW (DNG, ARW, CR2…)　|　Processed locally in your browser</span>
       </label>
       <canvas id="view" hidden></canvas>
+      <div class="cropper" id="cropper" hidden><canvas id="cropCanvas"></canvas><div class="cbox" id="cbox">
+        <i class="ch" data-h="nw"></i><i class="ch" data-h="ne"></i><i class="ch" data-h="sw"></i><i class="ch" data-h="se"></i>
+        <i class="ce" data-h="n"></i><i class="ce" data-h="s"></i><i class="ce" data-h="e"></i><i class="ce" data-h="w"></i></div></div>
     </div>
     <div class="meta" id="infobar" hidden>
       <span id="iSize"></span><span class="dot"></span>
       <span id="iMargin"></span><span class="dot"></span>
       <span id="iColor"></span>
       <button id="cmpBtn" title="Or hold the space bar">Hold to compare</button>
+      <button id="cropBtn" title="Crop this photo (C)">Crop</button>
+    </div>
+    <div class="cropbar" id="cropbar" hidden>
+      <div class="chips" id="cropRatios"></div>
+      <div class="actions">
+        <button class="textbtn" id="cropReset">Reset</button>
+        <span class="dim" id="cropDim"></span>
+        <button id="cropAll" hidden>Apply ratio to all</button>
+        <button id="cropCancel">Cancel</button>
+        <button class="primary" id="cropApply">Done</button>
+      </div>
     </div>
   </section>
 
@@ -718,7 +754,7 @@ function renderList(){
     const t=document.createElement("div"); t.className="t";
     const nm=document.createElement("div"); nm.className="n"; nm.textContent=it.name;
     if (it.preset!=="global"||it.color){ const b=document.createElement("span"); b.className="badge"; b.textContent="Custom"; nm.appendChild(b); }
-    const d=document.createElement("div"); d.className="d"; d.textContent = it.err ? it.err : it.prev ? `${it.w} × ${it.h}` : "Loading…";
+    const d=document.createElement("div"); d.className="d"; d.textContent = it.err ? it.err : it.prev ? `${it.w} × ${it.h}` + (it.cropRect ? " · cropped" : "") : "Loading…";
     if (it.err) d.style.color="var(--danger)";
     t.append(nm,d);
     const x=document.createElement("button"); x.className="x"; x.textContent="✕"; x.title="Remove";
@@ -752,7 +788,8 @@ async function addFiles(files){
       it.w=srcW(bmp); it.h=srcH(bmp);
       const sc=Math.min(1,1800/Math.max(it.w,it.h));
       it.prev=drawScaled(bmp,it.w*sc,it.h*sc); if (bmp.close) bmp.close();
-      it.stats=analyze(it.prev);
+      it.prev0=it.prev; it.W0=it.w; it.H0=it.h; it.cropRect=null;
+      it.stats=analyze(it.prev); it.stats0=it.stats;
       const ts=96/Math.min(it.prev.width,it.prev.height);
       it.thumb=drawScaled(it.prev,it.prev.width*ts,it.prev.height*ts);
     } catch(e){ it.err = /heic|heif/i.test(it.name) ? "HEIC isn't supported here — convert to JPG first" : isRaw(it.file) ? "No usable preview inside this RAW file" : "Couldn't read this file"; }
@@ -762,12 +799,140 @@ async function addFiles(files){
   }
 }
 
+/* ================= 裁剪 ================= */
+function cropCanvas(src, rN){
+  const W=srcW(src), H=srcH(src);
+  const sx=Math.round(rN.x*W), sy=Math.round(rN.y*H), sw=Math.max(1,Math.round(rN.w*W)), sh=Math.max(1,Math.round(rN.h*H));
+  const c=mkCanvas(sw,sh), x=c.getContext("2d"); x.imageSmoothingQuality="high"; x.drawImage(src,sx,sy,sw,sh,0,0,sw,sh);
+  return c;
+}
+function setCrop(it, rN){
+  if (rN && rN.x<=.002 && rN.y<=.002 && rN.w>=.996 && rN.h>=.996) rN=null;
+  it.cropRect=rN; it.crop=null; it._palKey=null;
+  if (!rN){ it.prev=it.prev0; it.w=it.W0; it.h=it.H0; }
+  else { it.prev=cropCanvas(it.prev0,rN); it.w=Math.round(it.W0*rN.w); it.h=Math.round(it.H0*rN.h); }
+  it.stats=analyze(it.prev);
+  const ts=96/Math.min(it.prev.width,it.prev.height); it.thumb=drawScaled(it.prev,it.prev.width*ts,it.prev.height*ts);
+}
+const CROP_RATIOS=[["free","Free"],["orig","Original"],["1:1","1:1"],["4:5","4:5"],["3:4","3:4"],["3:2","3:2"],["16:9","16:9"]];
+let CS=null; // crop session
+function ratioVal(key, it){
+  if (key==="free") return 0;
+  if (key==="orig") return it.W0/it.H0;
+  const [a,b]=key.split(":").map(Number); return a/b;
+}
+function largestRect(W,H,r,cx,cy){
+  let w=W, h=W/r; if (h>H){ h=H; w=H*r; }
+  const x=clamp(cx-w/2,0,W-w), y=clamp(cy-h/2,0,H-h); return {x,y,w,h};
+}
+function openCrop(){
+  const it=items[cur]; if (!it || !it.prev0 || CS) return;
+  if (picking) $("pickBtn").click();
+  const img=it.prev0, W=img.width, H=img.height;
+  const rN=it.cropRect;
+  CS={it, W, H, key:"free", r: rN ? {x:rN.x*W,y:rN.y*H,w:rN.w*W,h:rN.h*H} : {x:0,y:0,w:W,h:H}};
+  // 画面：显示调过色的原图（未裁）
+  const disp=drawScaled(img,W,H); applyColor(disp,it.stats0||it.stats,effPreset(it));
+  const st=$("stage"), maxW=st.clientWidth-40, maxH=st.clientHeight-40;
+  CS.k=Math.min(maxW/W, maxH/H);
+  const cv=$("cropCanvas"), dpr=window.devicePixelRatio||1;
+  cv.width=Math.round(W*CS.k*dpr); cv.height=Math.round(H*CS.k*dpr);
+  cv.style.width=Math.round(W*CS.k)+"px"; cv.style.height=Math.round(H*CS.k)+"px";
+  const cx=cv.getContext("2d"); cx.imageSmoothingQuality="high"; cx.drawImage(disp,0,0,cv.width,cv.height);
+  $("view").hidden=true; $("cropper").hidden=false; $("infobar").hidden=true; $("cropbar").hidden=false;
+  syncCropUI();
+}
+function closeCrop(apply){
+  if (!CS) return;
+  const it=CS.it;
+  if (apply){ const {W,H,r}=CS; setCrop(it,{x:r.x/W,y:r.y/H,w:r.w/W,h:r.h/H}); renderList(); }
+  CS=null; $("cropper").hidden=true; $("cropbar").hidden=true;
+  refreshAll();
+}
+function syncCropUI(){
+  if (!CS) return;
+  const {r,k,it,W,H}=CS, b=$("cbox");
+  b.style.left=r.x*k+"px"; b.style.top=r.y*k+"px"; b.style.width=r.w*k+"px"; b.style.height=r.h*k+"px";
+  [...$("cropRatios").children].forEach(c=>c.classList.toggle("on", c.dataset.v===CS.key));
+  $("cropDim").textContent=`${Math.round(r.w/W*it.W0)} × ${Math.round(r.h/H*it.H0)}`;
+  $("cropAll").hidden = CS.key==="free" || CS.key==="orig" || items.filter(i=>i.prev0).length<2;
+}
+for (const [v,l] of CROP_RATIOS){
+  const b=document.createElement("button"); b.className="chip"; b.textContent=l; b.dataset.v=v;
+  b.onclick=()=>{ if(!CS) return; CS.key=v; const rv=ratioVal(v,CS.it);
+    if (rv){ const {W,H,r}=CS; CS.r=largestRect(W,H,rv*H/W*W/H, r.x+r.w/2, r.y+r.h/2); }
+    syncCropUI(); };
+  $("cropRatios").appendChild(b);
+}
+// 拖动 / 缩放裁剪框
+let cdrag=null;
+$("cbox").addEventListener("pointerdown", e=>{
+  if (!CS) return; e.preventDefault();
+  const h=e.target.dataset.h||"move";
+  cdrag={h, x:e.clientX, y:e.clientY, r:{...CS.r}};
+  $("cbox").setPointerCapture(e.pointerId);
+});
+$("cbox").addEventListener("pointermove", e=>{
+  if (!cdrag||!CS) return;
+  const {W,H,k}=CS, o=cdrag.r, dx=(e.clientX-cdrag.x)/k, dy=(e.clientY-cdrag.y)/k, MIN=Math.max(24,Math.min(W,H)*.04);
+  const rv=ratioVal(CS.key,CS.it);
+  let r={...o};
+  if (cdrag.h==="move"){ r.x=clamp(o.x+dx,0,W-o.w); r.y=clamp(o.y+dy,0,H-o.h); }
+  else if (cdrag.h.length===2){ // 角
+    const right=cdrag.h[1]==="e", down=cdrag.h[0]==="s";
+    const ax=right?o.x:o.x+o.w, ay=down?o.y:o.y+o.h;
+    const px=(right?o.x+o.w:o.x)+dx, py=(down?o.y+o.h:o.y)+dy;
+    let w=Math.max(MIN, right?px-ax:ax-px), h=Math.max(MIN, down?py-ay:ay-py);
+    const maxW=right?W-ax:ax, maxH=down?H-ay:ay;
+    if (rv){ if (w/h>rv) w=h*rv; else h=w/rv; const f=Math.min(1,maxW/w,maxH/h); w*=f; h*=f; }
+    else { w=Math.min(w,maxW); h=Math.min(h,maxH); }
+    r={x:right?ax:ax-w, y:down?ay:ay-h, w, h};
+  } else { // 边
+    const hz = cdrag.h==="e"||cdrag.h==="w";
+    if (hz){
+      const right=cdrag.h==="e", ax=right?o.x:o.x+o.w, cy=o.y+o.h/2;
+      let w=Math.max(MIN,(right?o.x+o.w+dx-ax:ax-(o.x+dx))), maxW=right?W-ax:ax; w=Math.min(w,maxW);
+      let h=o.h, y=o.y;
+      if (rv){ h=w/rv; const maxH=2*Math.min(cy,H-cy); if (h>maxH){ h=maxH; w=h*rv; } y=cy-h/2; }
+      r={x:right?ax:ax-w, y, w, h};
+    } else {
+      const down=cdrag.h==="s", ay=down?o.y:o.y+o.h, cx=o.x+o.w/2;
+      let h=Math.max(MIN,(down?o.y+o.h+dy-ay:ay-(o.y+dy))), maxH=down?H-ay:ay; h=Math.min(h,maxH);
+      let w=o.w, x=o.x;
+      if (rv){ w=h*rv; const maxW=2*Math.min(cx,W-cx); if (w>maxW){ w=maxW; h=w/rv; } x=cx-w/2; }
+      r={x, y:down?ay:ay-h, w, h};
+    }
+  }
+  CS.r=r; syncCropUI();
+});
+const endC=()=>{ cdrag=null; };
+$("cbox").addEventListener("pointerup", endC); $("cbox").addEventListener("pointercancel", endC);
+$("cropBtn").onclick=openCrop;
+$("cropCancel").onclick=()=>closeCrop(false);
+$("cropApply").onclick=()=>closeCrop(true);
+$("cropReset").onclick=()=>{ if(!CS) return; CS.key="free"; CS.r={x:0,y:0,w:CS.W,h:CS.H}; syncCropUI(); };
+$("cropAll").onclick=()=>{
+  if (!CS) return;
+  const key=CS.key, mine=CS.it, {W,H,r}=CS;
+  setCrop(mine,{x:r.x/W,y:r.y/H,w:r.w/W,h:r.h/H});
+  for (const it of items){
+    if (it===mine || !it.prev0) continue;
+    const rv=ratioVal(key,it), w0=it.prev0.width, h0=it.prev0.height;
+    const q=largestRect(w0,h0,rv,w0/2,h0/2);
+    setCrop(it,{x:q.x/w0,y:q.y/h0,w:q.w/w0,h:q.h/h0});
+  }
+  CS=null; $("cropper").hidden=true; $("cropbar").hidden=true; renderList(); refreshAll();
+  toast(`Cropped all photos to ${key}`);
+};
+
 /* ================= 预览 ================= */
 let original=false, picking=false, rafId=0, lastPol=null;
 function refreshAll(){ cancelAnimationFrame(rafId); rafId=requestAnimationFrame(drawPreview); syncColorUI(); }
 function drawPreview(){
   const it=items[cur], view=$("view");
   const has = it && it.prev;
+  if (CS && CS.it!==it) { CS=null; $("cropper").hidden=true; $("cropbar").hidden=true; }
+  if (CS) return;
   $("empty").hidden = items.length>0; view.hidden=!has; $("infobar").hidden=!has;
   $("fname").textContent = it ? it.name : "FRAME LOG";
   if (!has) return;
@@ -837,7 +1002,8 @@ async function exportItems(list){
     for (let k=0;k<list.length;k++){
       const it=list[k];
       if (S.sizeMode==="polaroid" && it.caption) await ensureFont(it.caption);
-      let src; try { src=await decode(it.file); } catch(e){ src=it.prev; }
+      let src; try { src=await decode(it.file); } catch(e){ src=it.prev0||it.prev; }
+      if (it.cropRect){ const c=cropCanvas(src,it.cropRect); if (src.close) src.close(); src=c; }
       const r=render(src,it,S.outLong,true); if (src.close) src.close();
       const blob=await new Promise(res=>r.canvas.toBlob(res,"image/jpeg",S.quality));
       let bytes=new Uint8Array(await blob.arrayBuffer());
@@ -993,6 +1159,9 @@ document.addEventListener("keydown", e=>{
   else if ((e.key==="ArrowDown"||e.key==="ArrowRight") && items.length){ e.preventDefault(); select(Math.min(items.length-1,cur+1)); }
   else if ((e.key==="ArrowUp"||e.key==="ArrowLeft") && items.length){ e.preventDefault(); select(Math.max(0,cur-1)); }
   else if (e.key==="Escape" && picking){ $("pickBtn").click(); }
+  else if (CS && e.key==="Escape"){ closeCrop(false); }
+  else if (CS && e.key==="Enter"){ closeCrop(true); }
+  else if (!CS && (e.key==="c"||e.key==="C") && !e.metaKey && !e.ctrlKey){ openCrop(); }
 });
 document.addEventListener("keyup", e=>{ if (e.key===" ") up(); });
 
