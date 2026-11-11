@@ -79,18 +79,24 @@
   .cbox{position:absolute;border:1.5px solid #fff;box-shadow:0 0 0 9999px rgba(15,20,25,.55);cursor:move;
     background-image:linear-gradient(to right,transparent calc(33.33% - .5px),rgba(255,255,255,.45) calc(33.33% - .5px),rgba(255,255,255,.45) calc(33.33% + .5px),transparent calc(33.33% + .5px),transparent calc(66.66% - .5px),rgba(255,255,255,.45) calc(66.66% - .5px),rgba(255,255,255,.45) calc(66.66% + .5px),transparent calc(66.66% + .5px)),
     linear-gradient(to bottom,transparent calc(33.33% - .5px),rgba(255,255,255,.45) calc(33.33% - .5px),rgba(255,255,255,.45) calc(33.33% + .5px),transparent calc(33.33% + .5px),transparent calc(66.66% - .5px),rgba(255,255,255,.45) calc(66.66% - .5px),rgba(255,255,255,.45) calc(66.66% + .5px),transparent calc(66.66% + .5px))}
-  .ch{position:absolute;width:18px;height:18px;border:3px solid #fff;background:transparent}
-  .ch[data-h=nw]{left:-3px;top:-3px;border-right:0;border-bottom:0;cursor:nwse-resize}
-  .ch[data-h=ne]{right:-3px;top:-3px;border-left:0;border-bottom:0;cursor:nesw-resize}
-  .ch[data-h=sw]{left:-3px;bottom:-3px;border-right:0;border-top:0;cursor:nesw-resize}
-  .ch[data-h=se]{right:-3px;bottom:-3px;border-left:0;border-top:0;cursor:nwse-resize}
+  .cropper{cursor:crosshair}
+  .ch{position:absolute;width:30px;height:30px;border:5px solid #fff;background:transparent;filter:drop-shadow(0 0 2px rgba(0,0,0,.45))}
+  .ch[data-h=nw]{left:-5px;top:-5px;border-right:0;border-bottom:0;cursor:nwse-resize}
+  .ch[data-h=ne]{right:-5px;top:-5px;border-left:0;border-bottom:0;cursor:nesw-resize}
+  .ch[data-h=sw]{left:-5px;bottom:-5px;border-right:0;border-top:0;cursor:nesw-resize}
+  .ch[data-h=se]{right:-5px;bottom:-5px;border-left:0;border-top:0;cursor:nwse-resize}
   .ce{position:absolute;background:#fff;border-radius:2px}
-  .ce[data-h=n],.ce[data-h=s]{width:26px;height:4px;left:calc(50% - 13px);cursor:ns-resize}
-  .ce[data-h=n]{top:-2px}.ce[data-h=s]{bottom:-2px}
-  .ce[data-h=e],.ce[data-h=w]{height:26px;width:4px;top:calc(50% - 13px);cursor:ew-resize}
-  .ce[data-h=e]{right:-2px}.ce[data-h=w]{left:-2px}
-  .ch::after,.ce::after{content:"";position:absolute;inset:-12px}
-  .cropbar{display:flex;flex-direction:column;align-items:center;gap:10px;padding-bottom:6px}
+  .ce{filter:drop-shadow(0 0 2px rgba(0,0,0,.45))}
+  .ce[data-h=n],.ce[data-h=s]{width:40px;height:6px;left:calc(50% - 20px);cursor:ns-resize}
+  .ce[data-h=n]{top:-4px}.ce[data-h=s]{bottom:-4px}
+  .ce[data-h=e],.ce[data-h=w]{height:40px;width:6px;top:calc(50% - 20px);cursor:ew-resize}
+  .ce[data-h=e]{right:-4px}.ce[data-h=w]{left:-4px}
+  .ch::after{content:"";position:absolute;inset:-16px}
+  .ce::after{content:"";position:absolute;inset:-16px}
+  .cropbar .zoom{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);width:220px}
+  .cropbar .zoom input{flex:1}
+  .cropbar .hint{font-size:12px;color:var(--faint)}
+  .cropbar{display:flex;flex-direction:column;align-items:center;gap:8px;padding-bottom:4px}
   .cropbar .chips{justify-content:center}
   .cropbar .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center}
   .cropbar .actions button{border-radius:24px;padding:7px 16px;font-size:13.5px}
@@ -195,6 +201,7 @@
     <div class="cropbar" id="cropbar" hidden>
       <div class="chips" id="cropRatios"></div>
       <div class="actions">
+        <div class="zoom"><span>Zoom</span><input type="range" id="cropZoom" min="1" max="5" step="0.01" value="1"><span id="cropZoomVal">1.0×</span></div>
         <button class="textbtn" id="cropReset">Reset</button>
         <span class="dim" id="cropDim"></span>
         <button id="cropAll" hidden>Apply ratio to all</button>
@@ -833,13 +840,20 @@ function openCrop(){
   CS={it, W, H, key:"free", r: rN ? {x:rN.x*W,y:rN.y*H,w:rN.w*W,h:rN.h*H} : {x:0,y:0,w:W,h:H}};
   // 画面：显示调过色的原图（未裁）
   const disp=drawScaled(img,W,H); applyColor(disp,it.stats0||it.stats,effPreset(it));
-  const st=$("stage"), maxW=st.clientWidth-40, maxH=st.clientHeight-40;
+  CS.disp=disp;
+  $("fname").textContent="Drag to move · drag outside to redraw · scroll to zoom";
+  $("view").hidden=true; $("infobar").hidden=true; $("cropbar").hidden=false; $("cropper").hidden=false;
+  $("cropper").style.width="1px"; $("cropper").style.height="1px";
+  requestAnimationFrame(layoutCrop);
+}
+function layoutCrop(){
+  if (!CS) return;
+  const {W,H,disp}=CS, st=$("stage"), maxW=Math.max(200,st.clientWidth-32), maxH=Math.max(200,st.clientHeight-24);
   CS.k=Math.min(maxW/W, maxH/H);
-  const cv=$("cropCanvas"), dpr=window.devicePixelRatio||1;
-  cv.width=Math.round(W*CS.k*dpr); cv.height=Math.round(H*CS.k*dpr);
-  cv.style.width=Math.round(W*CS.k)+"px"; cv.style.height=Math.round(H*CS.k)+"px";
+  const cv=$("cropCanvas"), dpr=window.devicePixelRatio||1, cw=Math.round(W*CS.k), chh=Math.round(H*CS.k);
+  cv.width=Math.round(cw*dpr); cv.height=Math.round(chh*dpr); cv.style.width=cw+"px"; cv.style.height=chh+"px";
+  $("cropper").style.width=cw+"px"; $("cropper").style.height=chh+"px";
   const cx=cv.getContext("2d"); cx.imageSmoothingQuality="high"; cx.drawImage(disp,0,0,cv.width,cv.height);
-  $("view").hidden=true; $("cropper").hidden=false; $("infobar").hidden=true; $("cropbar").hidden=false;
   syncCropUI();
 }
 function closeCrop(apply){
@@ -856,48 +870,74 @@ function syncCropUI(){
   [...$("cropRatios").children].forEach(c=>c.classList.toggle("on", c.dataset.v===CS.key));
   $("cropDim").textContent=`${Math.round(r.w/W*it.W0)} × ${Math.round(r.h/H*it.H0)}`;
   $("cropAll").hidden = CS.key==="free" || CS.key==="orig" || items.filter(i=>i.prev0).length<2;
+  const z=zoomOf(); $("cropZoom").value=String(Math.min(5,z)); $("cropZoomVal").textContent=z.toFixed(1)+"×";
 }
+function aspectNow(){ const rv=ratioVal(CS.key,CS.it); return rv || CS.r.w/CS.r.h; }
+function maxFor(a){ const {W,H}=CS; let w=W, h=W/a; if (h>H){ h=H; w=H*a; } return {w,h}; }
+function zoomOf(){ const m=maxFor(aspectNow()); return Math.max(1, m.w/CS.r.w); }
+function setZoom(z, fx, fy){ // fx,fy: 缩放中心（图片坐标），默认框中心
+  const {W,H,r}=CS, a=aspectNow(), m=maxFor(a);
+  z=clamp(z,1,Math.max(1,Math.min(m.w,m.h)/24));
+  const w=m.w/z, h=m.h/z;
+  const cx = fx==null ? r.x+r.w/2 : fx + (r.x+r.w/2-fx)*(w/r.w);
+  const cy = fy==null ? r.y+r.h/2 : fy + (r.y+r.h/2-fy)*(h/r.h);
+  CS.r={x:clamp(cx-w/2,0,W-w), y:clamp(cy-h/2,0,H-h), w, h};
+  syncCropUI();
+}
+window.addEventListener("resize", ()=>{ if (CS) layoutCrop(); });
 for (const [v,l] of CROP_RATIOS){
   const b=document.createElement("button"); b.className="chip"; b.textContent=l; b.dataset.v=v;
   b.onclick=()=>{ if(!CS) return; CS.key=v; const rv=ratioVal(v,CS.it);
-    if (rv){ const {W,H,r}=CS; CS.r=largestRect(W,H,rv*H/W*W/H, r.x+r.w/2, r.y+r.h/2); }
+    if (rv){ const {W,H,r}=CS; CS.r=largestRect(W,H,rv, r.x+r.w/2, r.y+r.h/2); }
     syncCropUI(); };
   $("cropRatios").appendChild(b);
 }
-// 拖动 / 缩放裁剪框
+// 拖动 / 缩放裁剪框：框内拖 = 移动；角/边 = 缩放；框外拖 = 画新框；滚轮/触控板捏合 = 缩放
 let cdrag=null;
-$("cbox").addEventListener("pointerdown", e=>{
+function imgPt(e){ const rc=$("cropCanvas").getBoundingClientRect(); return {x:(e.clientX-rc.left)/CS.k, y:(e.clientY-rc.top)/CS.k}; }
+function anchored(ax,ay,px,py,rv){
+  const {W,H}=CS, MIN=Math.max(16,Math.min(W,H)*.03);
+  const sx=px>=ax?1:-1, sy=py>=ay?1:-1;
+  let w=Math.max(MIN,Math.abs(px-ax)), h=Math.max(MIN,Math.abs(py-ay));
+  const maxW=sx>0?W-ax:ax, maxH=sy>0?H-ay:ay;
+  if (rv){ if (w/h>rv) h=w/rv; else w=h*rv; const f=Math.min(1,maxW/w,maxH/h); w*=f; h*=f; }
+  else { w=Math.min(w,maxW); h=Math.min(h,maxH); }
+  return {x:sx>0?ax:ax-w, y:sy>0?ay:ay-h, w, h};
+}
+$("cropper").addEventListener("pointerdown", e=>{
   if (!CS) return; e.preventDefault();
-  const h=e.target.dataset.h||"move";
-  cdrag={h, x:e.clientX, y:e.clientY, r:{...CS.r}};
-  $("cbox").setPointerCapture(e.pointerId);
+  const p=imgPt(e), r=CS.r, h=e.target.dataset && e.target.dataset.h;
+  let mode;
+  if (h) mode=h;
+  else if (p.x>=r.x && p.x<=r.x+r.w && p.y>=r.y && p.y<=r.y+r.h) mode="move";
+  else mode="new";
+  cdrag={mode, p0:p, r:{...r}};
+  $("cropper").setPointerCapture(e.pointerId);
 });
-$("cbox").addEventListener("pointermove", e=>{
+$("cropper").addEventListener("pointermove", e=>{
   if (!cdrag||!CS) return;
-  const {W,H,k}=CS, o=cdrag.r, dx=(e.clientX-cdrag.x)/k, dy=(e.clientY-cdrag.y)/k, MIN=Math.max(24,Math.min(W,H)*.04);
-  const rv=ratioVal(CS.key,CS.it);
-  let r={...o};
-  if (cdrag.h==="move"){ r.x=clamp(o.x+dx,0,W-o.w); r.y=clamp(o.y+dy,0,H-o.h); }
-  else if (cdrag.h.length===2){ // 角
-    const right=cdrag.h[1]==="e", down=cdrag.h[0]==="s";
-    const ax=right?o.x:o.x+o.w, ay=down?o.y:o.y+o.h;
-    const px=(right?o.x+o.w:o.x)+dx, py=(down?o.y+o.h:o.y)+dy;
-    let w=Math.max(MIN, right?px-ax:ax-px), h=Math.max(MIN, down?py-ay:ay-py);
-    const maxW=right?W-ax:ax, maxH=down?H-ay:ay;
-    if (rv){ if (w/h>rv) w=h*rv; else h=w/rv; const f=Math.min(1,maxW/w,maxH/h); w*=f; h*=f; }
-    else { w=Math.min(w,maxW); h=Math.min(h,maxH); }
-    r={x:right?ax:ax-w, y:down?ay:ay-h, w, h};
+  const {W,H}=CS, o=cdrag.r, p=imgPt(e), rv=ratioVal(CS.key,CS.it), m=cdrag.mode;
+  const dx=p.x-cdrag.p0.x, dy=p.y-cdrag.p0.y;
+  let r;
+  if (m==="move") r={...o, x:clamp(o.x+dx,0,W-o.w), y:clamp(o.y+dy,0,H-o.h)};
+  else if (m==="new"){
+    if (Math.hypot(dx,dy)*CS.k<6) return;
+    r=anchored(clamp(cdrag.p0.x,0,W), clamp(cdrag.p0.y,0,H), clamp(p.x,0,W), clamp(p.y,0,H), rv);
+  }
+  else if (m.length===2){ // 角：对角固定
+    const ax=m[1]==="e"?o.x:o.x+o.w, ay=m[0]==="s"?o.y:o.y+o.h;
+    r=anchored(ax, ay, clamp(p.x,0,W), clamp(p.y,0,H), rv);
   } else { // 边
-    const hz = cdrag.h==="e"||cdrag.h==="w";
-    if (hz){
-      const right=cdrag.h==="e", ax=right?o.x:o.x+o.w, cy=o.y+o.h/2;
-      let w=Math.max(MIN,(right?o.x+o.w+dx-ax:ax-(o.x+dx))), maxW=right?W-ax:ax; w=Math.min(w,maxW);
+    const MIN=Math.max(16,Math.min(W,H)*.03);
+    if (m==="e"||m==="w"){
+      const right=m==="e", ax=right?o.x:o.x+o.w, cy=o.y+o.h/2;
+      let w=Math.max(MIN, right?clamp(p.x,0,W)-ax:ax-clamp(p.x,0,W)); w=Math.min(w,right?W-ax:ax);
       let h=o.h, y=o.y;
       if (rv){ h=w/rv; const maxH=2*Math.min(cy,H-cy); if (h>maxH){ h=maxH; w=h*rv; } y=cy-h/2; }
       r={x:right?ax:ax-w, y, w, h};
     } else {
-      const down=cdrag.h==="s", ay=down?o.y:o.y+o.h, cx=o.x+o.w/2;
-      let h=Math.max(MIN,(down?o.y+o.h+dy-ay:ay-(o.y+dy))), maxH=down?H-ay:ay; h=Math.min(h,maxH);
+      const down=m==="s", ay=down?o.y:o.y+o.h, cx=o.x+o.w/2;
+      let h=Math.max(MIN, down?clamp(p.y,0,H)-ay:ay-clamp(p.y,0,H)); h=Math.min(h,down?H-ay:ay);
       let w=o.w, x=o.x;
       if (rv){ w=h*rv; const maxW=2*Math.min(cx,W-cx); if (w>maxW){ w=maxW; h=w/rv; } x=cx-w/2; }
       r={x, y:down?ay:ay-h, w, h};
@@ -906,7 +946,14 @@ $("cbox").addEventListener("pointermove", e=>{
   CS.r=r; syncCropUI();
 });
 const endC=()=>{ cdrag=null; };
-$("cbox").addEventListener("pointerup", endC); $("cbox").addEventListener("pointercancel", endC);
+$("cropper").addEventListener("pointerup", endC); $("cropper").addEventListener("pointercancel", endC);
+// 滚轮 / 触控板捏合缩放（以鼠标位置为中心）
+$("cropper").addEventListener("wheel", e=>{
+  if (!CS) return; e.preventDefault();
+  const p=imgPt(e), f=Math.exp(-clamp(e.deltaY,-60,60)*(e.ctrlKey?0.01:0.0022));
+  setZoom(zoomOf()*f, p.x, p.y);
+},{passive:false});
+$("cropZoom").addEventListener("input", e=>{ if (CS) setZoom(parseFloat(e.target.value)); });
 $("cropBtn").onclick=openCrop;
 $("cropCancel").onclick=()=>closeCrop(false);
 $("cropApply").onclick=()=>closeCrop(true);
@@ -1154,13 +1201,21 @@ const down=e=>{ if(e) e.preventDefault(); if(original) return; original=true; dr
 const up=()=>{ if(!original) return; original=false; drawPreview(); cmp.textContent="Hold to compare"; };
 cmp.addEventListener("pointerdown",down); cmp.addEventListener("pointerup",up); cmp.addEventListener("pointerleave",up);
 document.addEventListener("keydown", e=>{
-  if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+  const ae=document.activeElement;
+  if (/SELECT|TEXTAREA/.test(ae.tagName) || (ae.tagName==="INPUT" && !/range|checkbox|radio|button/.test(ae.type))) return;
   if (e.key===" "){ down(e); }
-  else if ((e.key==="ArrowDown"||e.key==="ArrowRight") && items.length){ e.preventDefault(); select(Math.min(items.length-1,cur+1)); }
-  else if ((e.key==="ArrowUp"||e.key==="ArrowLeft") && items.length){ e.preventDefault(); select(Math.max(0,cur-1)); }
+  else if (!CS && (e.key==="ArrowDown"||e.key==="ArrowRight") && items.length){ e.preventDefault(); select(Math.min(items.length-1,cur+1)); }
+  else if (!CS && (e.key==="ArrowUp"||e.key==="ArrowLeft") && items.length){ e.preventDefault(); select(Math.max(0,cur-1)); }
   else if (e.key==="Escape" && picking){ $("pickBtn").click(); }
   else if (CS && e.key==="Escape"){ closeCrop(false); }
   else if (CS && e.key==="Enter"){ closeCrop(true); }
+  else if (CS && e.key.startsWith("Arrow")){
+    e.preventDefault(); const st=(e.shiftKey?10:1)/CS.k, r=CS.r;
+    const dx=e.key==="ArrowLeft"?-st:e.key==="ArrowRight"?st:0, dy=e.key==="ArrowUp"?-st:e.key==="ArrowDown"?st:0;
+    CS.r={...r, x:clamp(r.x+dx,0,CS.W-r.w), y:clamp(r.y+dy,0,CS.H-r.h)}; syncCropUI();
+  }
+  else if (CS && (e.key==="+"||e.key==="=")){ setZoom(zoomOf()*1.1); }
+  else if (CS && e.key==="-"){ setZoom(zoomOf()/1.1); }
   else if (!CS && (e.key==="c"||e.key==="C") && !e.metaKey && !e.ctrlKey){ openCrop(); }
 });
 document.addEventListener("keyup", e=>{ if (e.key===" ") up(); });
